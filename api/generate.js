@@ -81,12 +81,22 @@ export default async function handler(req, res) {
       try {
         parsed = JSON.parse(text)
       } catch (e) {
-        // Basic repair for truncated JSON (unterminated strings or missing closing braces)
+        // Basic repair for truncated JSON
         try {
           let repaired = text.trim()
 
-          // Fix unterminated string if it ends with a quote that isn't closed
-          if ((repaired.match(/"/g) || []).length % 2 !== 0) {
+          // Handle literal newlines inside strings - common AI failure
+          repaired = repaired.split('\n').map((line, i, arr) => {
+            const trimmed = line.trim()
+            if (i < arr.length - 1 && !trimmed.endsWith(',') && !trimmed.endsWith('{') && !trimmed.endsWith('[') && !trimmed.endsWith('}') && !trimmed.endsWith(']')) {
+              return line + '\\n'
+            }
+            return line
+          }).join('')
+
+          // Fix unterminated string
+          const quoteCount = (repaired.replace(/\\"/g, '').match(/"/g) || []).length
+          if (quoteCount % 2 !== 0) {
             repaired += '"'
           }
 
@@ -96,8 +106,8 @@ export default async function handler(req, res) {
           const openBrackets = (repaired.match(/\[/g) || []).length
           const closeBrackets = (repaired.match(/\]/g) || []).length
 
-          repaired += ' ]'.repeat(Math.max(0, openBrackets - closeBrackets))
-          repaired += ' }'.repeat(Math.max(0, openBraces - closeBraces))
+          if (openBrackets > closeBrackets) repaired += ' ]'.repeat(openBrackets - closeBrackets)
+          if (openBraces > closeBraces) repaired += ' }'.repeat(openBraces - closeBraces)
 
           parsed = JSON.parse(repaired)
         } catch (err2) {
