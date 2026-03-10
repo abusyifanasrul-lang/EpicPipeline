@@ -71,10 +71,10 @@ export default async function handler(req, res) {
       const result = await model.generateContent(prompt)
       let text = result.response.text()
 
-      // Robust JSON extraction
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        text = jsonMatch[0]
+      // Robust JSON extraction - find first {
+      const firstBrace = text.indexOf('{')
+      if (firstBrace !== -1) {
+        text = text.slice(firstBrace)
       }
 
       let parsed
