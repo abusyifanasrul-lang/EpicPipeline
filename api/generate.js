@@ -53,39 +53,40 @@ export default async function handler(req, res) {
   }
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+  const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']
 
   let lastError
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash', // Switching to 2.0-flash for better stability during 2.5 peak demand
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.85,
-          maxOutputTokens: 8192,
-        },
-        systemInstruction: SYSTEM_PROMPT,
-      })
+  let success = false
+  let parsed
 
-      const result = await model.generateContent(prompt)
-      let text = result.response.text()
+  for (const modelName of modelsToTry) {
+    if (success) break
 
-      // Robust JSON extraction - find first {
-      const firstBrace = text.indexOf('{')
-      if (firstBrace !== -1) {
-        text = text.slice(firstBrace)
-      }
-
-      let parsed
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        parsed = JSON.parse(text)
-      } catch (e) {
-        // Basic repair for truncated JSON
-        try {
-          let repaired = text.trim()
+        const genAI = new GoogleGenerativeAI(apiKey)
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.8,
+            maxOutputTokens: 8192,
+          },
+          systemInstruction: SYSTEM_PROMPT,
+        })
 
-          // Handle literal newlines inside strings - common AI failure
+        const result = await model.generateContent(prompt)
+        let text = result.response.text()
+
+        // Robust JSON extraction
+        const firstBrace = text.indexOf('{')
+        if (firstBrace !== -1) text = text.slice(firstBrace)
+
+        try {
+          parsed = JSON.parse(text)
+        } catch (e) {
+          // Repair logic
+          let repaired = text.trim()
           repaired = repaired.split('\n').map((line, i, arr) => {
             const trimmed = line.trim()
             if (i < arr.length - 1 && !trimmed.endsWith(',') && !trimmed.endsWith('{') && !trimmed.endsWith('[') && !trimmed.endsWith('}') && !trimmed.endsWith(']')) {
@@ -94,13 +95,9 @@ export default async function handler(req, res) {
             return line
           }).join('')
 
-          // Fix unterminated string
           const quoteCount = (repaired.replace(/\\"/g, '').match(/"/g) || []).length
-          if (quoteCount % 2 !== 0) {
-            repaired += '"'
-          }
+          if (quoteCount % 2 !== 0) repaired += '"'
 
-          // Close missing arrays/objects
           const openBraces = (repaired.match(/\{/g) || []).length
           const closeBraces = (repaired.match(/\}/g) || []).length
           const openBrackets = (repaired.match(/\[/g) || []).length
@@ -110,27 +107,38 @@ export default async function handler(req, res) {
           if (openBraces > closeBraces) repaired += ' }'.repeat(openBraces - closeBraces)
 
           parsed = JSON.parse(repaired)
-        } catch (err2) {
-          console.error('Final JSON parse failed:', err2.message)
-          throw new Error('API outputted invalid JSON structure. Please try regenerating.')
         }
-      }
 
-      return res.status(200).json({ ok: true, data: parsed })
-    } catch (err) {
-      lastError = err
-      console.error(`Attempt ${attempt} failed:`, err.message)
-      if (attempt < 3 && (err.message.includes('503') || err.message.includes('demand'))) {
-        const delay = Math.pow(2, attempt) * 1000
-        console.log(`Retrying in ${delay}ms...`)
-        await sleep(delay)
-        continue
+        success = true
+        break
+      } catch (err) {
+        lastError = err
+        const isQuota = err.message.includes('429') || err.message.includes('quota')
+        const isOverload = err.message.includes('503') || err.message.includes('demand')
+
+        console.error(`Model ${modelName} Attempt ${attempt} failed:`, err.message)
+
+        if (attempt < 2 && (isOverload || isQuota)) {
+          await sleep(2000 * attempt)
+          continue
+        }
+        // If it's a structural error or we're out of attempts for this model, try next model
+        break
       }
-      break
     }
   }
 
-  return res.status(500).json({ error: lastError?.message || 'Generation failed after 3 attempts' })
+  if (success) {
+    return res.status(200).json({ ok: true, data: parsed })
+  }
+
+  const isQuota = lastError?.message?.includes('429') || lastError?.message?.includes('quota')
+  const status = isQuota ? 429 : 500
+  const userMessage = isQuota
+    ? "Batas penggunaan (quota) Gemini Free Tier tercapai. Mohon tunggu 1-2 menit lalu coba lagi (Regenerate)."
+    : `Generation failed: ${lastError?.message}`
+
+  return res.status(status).json({ error: userMessage })
 }
 
 // ============================================================
