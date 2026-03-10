@@ -1,496 +1,1679 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI Video Production Pipeline</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg0:#080810; --bg1:#0d0d18; --bg2:#131320; --bg3:#1a1a2e;
-    --border:#252540; --border-a:#5b4fff;
-    --accent:#5b4fff; --accent2:#9d8fff;
-    --gold:#e8b84b; --green:#00c896; --red:#ff5e5e; --orange:#ff9640;
-    --t1:#eeeef8; --t2:#9090b8; --t3:#555570;
-    --mono:'Space Mono',monospace; --sans:'DM Sans',system-ui,sans-serif;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg0);color:var(--t1);font-family:var(--sans);overflow-x:hidden}
-  ::-webkit-scrollbar{width:5px;height:5px}
-  ::-webkit-scrollbar-track{background:var(--bg0)}
-  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-  ::-webkit-scrollbar-thumb:hover{background:var(--accent)}
-
-  .app{display:flex;height:100vh;overflow:hidden}
-
-  /* SIDEBAR */
-  .sidebar{width:255px;min-width:255px;background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column}
-  .sb-logo{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-  .sb-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-  .sb-title{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--t1);letter-spacing:.1em}
-  .sb-sub{font-family:var(--mono);font-size:8px;color:var(--t3);letter-spacing:.18em;margin-top:1px}
-  .sb-nav{flex:1;overflow-y:auto;padding:8px}
-  .sb-btn{width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:7px;padding:8px 11px;margin-bottom:2px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:all .15s;color:var(--t2);font-family:var(--sans)}
-  .sb-btn:disabled{opacity:.3;cursor:not-allowed}
-  .sb-btn:not(:disabled):hover{background:var(--bg3);border-color:var(--border)}
-  .sb-btn.active{background:rgba(91,79,255,.12);border-color:var(--accent);color:var(--accent2)}
-  .sb-btn.done{color:var(--green)}
-  .sb-btn-ico{font-size:13px;width:18px;text-align:center;flex-shrink:0}
-  .sb-btn-num{font-family:var(--mono);font-size:9px;color:var(--t3)}
-  .sb-btn-name{font-size:11px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .sb-badge{font-family:var(--mono);font-size:8px;padding:2px 5px;border-radius:3px}
-  .sb-badge-done{background:rgba(0,200,150,.1);color:var(--green);border:1px solid rgba(0,200,150,.2)}
-  .sb-badge-gate{background:rgba(255,94,94,.1);color:var(--red);border:1px solid rgba(255,94,94,.2)}
-  .sb-progress{padding:12px 18px;border-top:1px solid var(--border)}
-  .sb-prog-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--t3);margin-bottom:7px}
-  .sb-prog-row span:last-child{color:var(--accent2)}
-  .sb-track{height:3px;background:var(--bg3);border-radius:2px;overflow:hidden}
-  .sb-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .8s ease}
-
-  /* MAIN */
-  .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-  .topbar{height:46px;min-height:46px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:14px;overflow-x:auto}
-  .tb-block{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:10px;white-space:nowrap}
-  .tb-k{color:var(--t3)} .tb-v{color:var(--gold)} .tb-vs{color:var(--accent2)} .tb-vd{color:var(--green)} .tb-va{color:var(--orange)} .tb-sep{color:var(--border)}
-
-  .content{flex:1;overflow-y:auto}
-  .inner{max-width:860px;margin:0 auto;padding:32px 28px}
-
-  /* STAGE HEADER */
-  .sh{margin-bottom:28px}
-  .sh-tags{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-  .sh-badge{font-family:var(--mono);font-size:9px;padding:3px 8px;border-radius:4px}
-  .sh-num{color:var(--accent);background:rgba(91,79,255,.12);border:1px solid rgba(91,79,255,.25)}
-  .sh-ok{color:var(--green);background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.25)}
-  .sh-blocked{color:var(--red);background:rgba(255,94,94,.1);border:1px solid rgba(255,94,94,.25)}
-  .sh-title{font-size:26px;font-weight:600;color:var(--t1)}
-  .sh-desc{font-size:13px;color:var(--t2);margin-top:5px;line-height:1.6}
-
-  /* CARD */
-  .card{background:linear-gradient(135deg,rgba(22,22,40,.8),rgba(26,26,48,.5));border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:14px;transition:border-color .2s}
-  .card:hover{border-color:rgba(91,79,255,.35)}
-
-  /* CODE BLOCK + COPY */
-  .copy-wrap{position:relative;margin-bottom:12px}
-  .copy-btn{position:absolute;top:8px;right:8px;z-index:10;background:rgba(91,79,255,.18);border:1px solid rgba(91,79,255,.35);color:var(--accent2);font-family:var(--mono);font-size:9px;padding:4px 9px;border-radius:4px;cursor:pointer;transition:all .15s;letter-spacing:.04em}
-  .copy-btn:hover{background:rgba(91,79,255,.3)}
-  .copy-btn.ok{background:rgba(0,200,150,.18);border-color:rgba(0,200,150,.35);color:var(--green)}
-  pre.cb{font-family:var(--mono);font-size:11.5px;line-height:1.8;background:#090914;border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto;white-space:pre-wrap;word-break:break-word;color:var(--t1)}
-
-  /* EXPANDABLE */
-  .xp{border:1px solid var(--border);border-radius:9px;margin-bottom:7px;overflow:hidden;transition:border-color .2s}
-  .xp.open{border-color:var(--accent)}
-  .xp-hd{width:100%;text-align:left;background:none;border:none;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:background .15s;font-family:var(--sans)}
-  .xp.open .xp-hd,.xp-hd:hover{background:rgba(91,79,255,.06)}
-  .xp-left{display:flex;align-items:center;gap:9px}
-  .xp-arrow{font-size:8px;color:var(--t3);transition:transform .2s}
-  .xp.open .xp-arrow{transform:rotate(90deg)}
-  .xp-title{font-size:13px;font-weight:500;color:var(--t1)}
-  .xp-badge{font-family:var(--mono);font-size:9px;color:var(--t3);background:var(--bg2);padding:2px 7px;border-radius:3px;border:1px solid var(--border)}
-  .xp-hint{font-family:var(--mono);font-size:9px;color:var(--t3)}
-  .xp-body{padding:14px 16px;border-top:1px solid var(--border)}
-
-  /* FIELD ROW */
-  .fr{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid rgba(37,37,64,.5)}
-  .fr:last-child{border-bottom:none}
-  .frl{font-family:var(--mono);font-size:10px;color:var(--accent2);width:150px;flex-shrink:0;padding-top:1px}
-  .frv{font-size:12px;color:var(--t1);line-height:1.6}
-
-  /* SECTION TITLE */
-  .st{font-size:14px;font-weight:600;color:var(--t1);margin:24px 0 12px;display:flex;align-items:center;gap:7px}
-  .lbl{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--accent2);text-transform:uppercase}
-
-  /* GRIDS */
-  .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-
-  /* INFO BOX */
-  .ib{border-radius:8px;padding:13px 16px;margin-bottom:14px}
-  .ib.purple{background:rgba(91,79,255,.07);border:1px solid rgba(91,79,255,.2)}
-  .ib.green{background:rgba(0,200,150,.06);border:1px solid rgba(0,200,150,.2)}
-  .ib.gold{background:rgba(232,184,75,.07);border:1px solid rgba(232,184,75,.2)}
-  .ib.red{background:rgba(255,94,94,.06);border:1px solid rgba(255,94,94,.2)}
-  .ib-checks{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:9px}
-  .ib-check{font-size:11px;color:var(--t2);display:flex;align-items:flex-start;gap:6px}
-  .ib-check::before{content:'✓';color:var(--green);flex-shrink:0}
-
-  /* IDEA CARD */
-  .idea{padding:10px 12px;border-radius:7px;border:1px solid var(--border);background:rgba(20,20,36,.6);transition:all .15s}
-  .idea.sel{border-color:var(--gold);background:rgba(232,184,75,.07)}
-  .idea-num{font-family:var(--mono);font-size:9px;color:var(--t3)}
-  .idea-cat{font-family:var(--mono);font-size:10px;color:var(--accent2);font-weight:700;display:block;margin:2px 0}
-  .idea-txt{font-size:11px;color:var(--t2);line-height:1.5}
-
-  /* EMOTIONAL ANCHOR */
-  .ea{background:rgba(91,79,255,.08);border:2px solid rgba(91,79,255,.4);border-radius:9px;padding:16px 20px;margin-bottom:20px}
-  .ea-lbl{font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:.15em;font-weight:700;margin-bottom:7px}
-  .ea-txt{font-size:14px;color:var(--t1);line-height:1.65;font-style:italic}
-
-  /* STORY PHASE */
-  .phase{margin-bottom:18px}
-  .phase-lbl{display:flex;align-items:center;gap:9px;margin-bottom:7px}
-  .phase-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-  .phase-time{font-family:var(--mono);font-size:9px;color:var(--t3)}
-  .phase-txt{font-size:12px;color:var(--t1);line-height:1.8;padding-left:16px}
-
-  /* ANCHOR BOX */
-  .anch{border:2px solid var(--accent);border-radius:9px;overflow:hidden}
-  .anch-hd{background:rgba(91,79,255,.12);padding:9px 16px;border-bottom:1px solid var(--accent);font-family:var(--mono);font-size:9px;color:var(--accent2);font-weight:700}
-
-  /* STATE ENTRY */
-  .se{background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:7px 11px;margin-bottom:5px}
-  .se-shot{font-family:var(--mono);font-size:10px;color:var(--gold)}
-  .se-txt{font-family:var(--mono);font-size:10px;color:var(--t1);line-height:1.6}
-
-  /* TABLE */
-  .dt{width:100%;font-family:var(--mono);font-size:10px;border-collapse:collapse}
-  .dt th{text-align:left;padding:7px 11px;color:var(--accent2);border-bottom:1px solid var(--border)}
-  .dt td{padding:6px 11px;border-bottom:1px solid rgba(37,37,64,.4);color:var(--t1)}
-  .dt tfoot td{border-top:2px solid var(--accent);color:var(--green);font-weight:700}
-  .td-g{color:var(--gold)} .td-m{color:var(--t2)}
-  tr.dissolve{background:rgba(232,184,75,.04)}
-
-  /* TIMELINE */
-  .tl-row{display:flex;align-items:center;gap:11px;background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:9px 13px;margin-bottom:5px}
-  .tl-t{font-family:var(--mono);font-size:10px;color:var(--gold);width:42px;flex-shrink:0}
-  .tl-bar{flex:0 0 70px;height:3px;background:var(--bg3);border-radius:2px;overflow:hidden}
-  .tl-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px}
-  .tl-v{font-family:var(--mono);font-size:9px;color:var(--t3);width:28px;text-align:right}
-  .tl-e{font-size:11px;color:var(--t2);flex:1}
-
-  /* TAGS */
-  .tag{display:inline-block;font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;margin:2px}
-  .tag-a{background:rgba(91,79,255,.15);color:var(--accent2);border:1px solid rgba(91,79,255,.3)}
-  .tag-r{background:rgba(255,94,94,.12);color:var(--red);border:1px solid rgba(255,94,94,.25)}
-
-  /* ACTION BUTTONS */
-  .act{margin-top:36px;padding-top:22px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-  .btn-ok{background:linear-gradient(135deg,var(--green),#00a878);color:#000;border:none;padding:10px 26px;border-radius:7px;font-weight:600;font-size:13px;cursor:pointer;transition:all .2s;font-family:var(--sans)}
-  .btn-ok:hover{transform:translateY(-2px);box-shadow:0 4px 18px rgba(0,200,150,.28)}
-  .btn-regen{background:transparent;color:var(--gold);border:1px solid var(--gold);padding:10px 26px;border-radius:7px;font-weight:500;font-size:13px;cursor:pointer;transition:all .2s;font-family:var(--sans)}
-  .btn-regen:hover{background:rgba(232,184,75,.08);transform:translateY(-2px)}
-  .approved-ind{display:inline-flex;align-items:center;gap:7px;background:rgba(0,200,150,.08);color:var(--green);border:1px solid rgba(0,200,150,.25);padding:10px 22px;border-radius:7px;font-family:var(--mono);font-size:11px;font-weight:700}
-
-  /* GENERATING */
-  .gen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:380px}
-  .gen-ico{width:66px;height:66px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:20px;position:relative}
-  .gen-ring{position:absolute;inset:-9px;border:2px solid rgba(91,79,255,.3);border-radius:22px;animation:rp 2s ease-in-out infinite}
-  @keyframes rp{0%,100%{opacity:.3;transform:scale(1)}50%{opacity:.7;transform:scale(1.05)}}
-  .gen-title{font-size:18px;font-weight:600;color:var(--t1);margin-bottom:6px}
-  .gen-stage{font-family:var(--mono);font-size:10px;color:var(--accent2);margin-bottom:5px}
-  .gen-msg{font-family:var(--mono);font-size:9px;color:var(--t3)}
-  .gen-bar{width:160px;height:3px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-top:20px}
-  .gen-prog{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));animation:ga 2s ease-in-out infinite;border-radius:2px}
-  @keyframes ga{0%{width:15%}50%{width:80%}100%{width:15%}}
-
-  /* INPUT */
-  .inp-wrap{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
-  .inp-label{font-family:var(--mono);font-size:10px;color:var(--accent2);letter-spacing:.08em}
-  textarea.inp{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;color:var(--t1);font-family:var(--sans);font-size:13px;line-height:1.6;resize:vertical;min-height:100px;width:100%;transition:border-color .2s;outline:none}
-  textarea.inp:focus{border-color:var(--accent)}
-  input.inp{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--t1);font-family:var(--sans);font-size:13px;width:100%;transition:border-color .2s;outline:none}
-  input.inp:focus{border-color:var(--accent)}
-  .btn-gen{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:11px 28px;border-radius:7px;font-weight:600;font-size:13px;cursor:pointer;font-family:var(--sans);transition:all .2s}
-  .btn-gen:hover{transform:translateY(-2px);box-shadow:0 4px 18px rgba(91,79,255,.3)}
-  .btn-gen:disabled{opacity:.5;cursor:not-allowed;transform:none}
-
-  /* GATE */
-  .gate{background:rgba(255,94,94,.05);border:2px solid rgba(255,94,94,.3);border-radius:10px;padding:24px;text-align:center}
-  .gate-ico{font-size:36px;margin-bottom:12px}
-  .gate-title{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--red);margin-bottom:9px;letter-spacing:.1em}
-  .gate-desc{font-size:12px;color:var(--t2);line-height:1.7;max-width:460px;margin:0 auto 16px}
-  .gate-rule{font-family:var(--mono);font-size:9px;color:rgba(255,94,94,.7);background:rgba(255,94,94,.06);border:1px solid rgba(255,94,94,.15);border-radius:6px;padding:11px 14px;text-align:left;margin-top:14px;line-height:1.9}
-
-  /* COMPLETION */
-  .done-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;padding:50px 24px;text-align:center}
-  .done-ico{font-size:60px;margin-bottom:18px}
-  .done-title{font-size:34px;font-weight:600;margin-bottom:8px}
-  .done-sub{font-family:var(--mono);font-size:13px;color:var(--accent2);margin-bottom:10px}
-  .done-desc{font-size:12px;color:var(--t2);max-width:420px;line-height:1.7;margin-bottom:28px}
-  .done-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;max-width:560px;width:100%;margin:0 auto 28px}
-  .done-stage{background:rgba(0,200,150,.08);border:1px solid rgba(0,200,150,.2);border-radius:7px;padding:10px 6px;text-align:center}
-  .done-stage-name{font-family:var(--mono);font-size:8px;color:var(--green);line-height:1.3;margin-top:4px}
-  .next-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:440px;width:100%;text-align:left}
-  .next-title{font-family:var(--mono);font-size:10px;color:var(--gold);font-weight:700;margin-bottom:12px;letter-spacing:.1em}
-  .next-item{font-size:12px;color:var(--t2);padding:5px 0;border-bottom:1px solid rgba(37,37,64,.4)}
-  .next-item:last-child{border-bottom:none}
-
-  /* ERROR */
-  .err{background:rgba(255,94,94,.08);border:1px solid rgba(255,94,94,.3);border-radius:8px;padding:14px 16px;font-family:var(--mono);font-size:11px;color:var(--red);margin-bottom:14px}
-
-  .anim{animation:fu .4s ease-out forwards}
-  @keyframes fu{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-  @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-</style>
-</head>
-<body>
-<div class="app" id="app">
-  <aside class="sidebar">
-    <div class="sb-logo">
-      <div class="sb-icon">🎬</div>
-      <div>
-        <div class="sb-title">AI VIDEO</div>
-        <div class="sb-sub">PRODUCTION PIPELINE</div>
-      </div>
-    </div>
-    <nav class="sb-nav" id="sbNav"></nav>
-    <div class="sb-progress">
-      <div class="sb-prog-row"><span>PIPELINE PROGRESS</span><span id="progLabel">0 / 10</span></div>
-      <div class="sb-track"><div class="sb-fill" id="progFill" style="width:0%"></div></div>
-    </div>
-  </aside>
-  <main class="main">
-    <header class="topbar" id="topbar"></header>
-    <div class="content"><div class="inner" id="inner"></div></div>
-  </main>
-</div>
-
-<script>
-// ============================================================
-// CONSTANTS
-// ============================================================
-const NAMES = ['Creative Brief','Story Generation','Reference Image Analysis','Element Registry','Storyboard & Shot Breakdown','Image Prompts','Motion Prompts','Narration','Music','Assembly Guide']
-const ICONS = ['📋','✍️','🖼️','📦','🎬','🖌️','🎥','🗣️','🎵','🏗️']
-const DESCS = [
-  'Describe your video concept. The AI will generate a complete creative brief.',
-  'Emotion-driven story built from an Emotional Anchor. Every beat is filmable.',
-  'Visual style analyzed and locked. Style Anchor generated for consistency.',
-  'All recurring visual elements registered as inject-ready prompt fragments.',
-  'Story broken into individual shots with camera planning and continuity rules.',
-  'Self-contained image prompts generated for every shot\'s start frame.',
-  '⚠️ HARD GATE — Upload actual generated start frame images before proceeding.',
-  'Narration assessment complete. Minimal approach recommended.',
-  'Musical score direction, timeline, and SFX notes mapped to story structure.',
-  'Complete assembly guide with timecodes, transitions, color grade, and export.',
-]
-const MSGS = ['Analyzing concept parameters...','Constructing narrative architecture...','Processing visual reference data...','Building element registry fragments...','Planning camera choreography...','Engineering image prompts...','Calculating motion vectors...','Composing narration script...','Mapping musical architecture...','Compiling assembly blueprint...']
-const PHASE_COLORS = {opening:'#74b9ff',discovery:'#a29bfe',escalation:'#fdcb6e',turningPoint:'#ff5e5e',resolution:'#00c896'}
-const PHASE_LABELS = {opening:'OPENING',discovery:'DISCOVERY',escalation:'ESCALATION',turningPoint:'TURNING POINT',resolution:'RESOLUTION'}
-const PHASE_TIMES = {opening:'0–8s',discovery:'8–18s',escalation:'18–35s',turningPoint:'35–50s',resolution:'50–60s'}
-
-// ============================================================
-// STATE
-// ============================================================
-const state = {
-  active: 0,
-  stages: Array.from({length:10}, () => ({generated:false, approved:false, generating:false, error:null})),
-  data: {
-    brief: null, story: null, styleAnchor: null, refAnalysis: null,
-    elements: null, stateRegistry: null, shots: null,
-    imagePrompts: null, motionPrompts: null,
-    narration: null, music: null, assembly: null
-  },
-  userInput: '',
-  startFrameNotes: ''
-}
-
-// ============================================================
-// API CALL
-// ============================================================
-async function callAPI(stage, context) {
-  const res = await fetch('/api/generate', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({stage, context})
-  })
-  const json = await res.json()
-  if (!res.ok || json.error) throw new Error(json.error || 'API error')
-  return json.data
-}
-
-// ============================================================
-// GENERATE STAGE
-// ============================================================
-async function generateStage(idx) {
-  state.stages[idx] = {generated:false, approved:false, generating:true, error:null}
-  render()
-
-  try {
-    let result
-    const d = state.data
-
-    switch(idx) {
-      case 0:
-        result = await callAPI(0, {userInput: state.userInput})
-        d.brief = result
-        break
-      case 1:
-        result = await callAPI(1, {brief: d.brief})
-        d.story = result
-        break
-      case 2:
-        result = await callAPI(2, {brief: d.brief, story: d.story})
-        d.refAnalysis = result
-        d.styleAnchor = result.styleAnchor
-        break
-      case 3:
-        result = await callAPI(3, {story: d.story, styleAnchor: d.styleAnchor})
-        d.elements = result.elements
-        d.stateRegistry = result.stateRegistry
-        break
-      case 4:
-        result = await callAPI(4, {story: d.story})
-        d.shots = result.shots
-        break
-      case 5:
-        result = await callAPI(5, {shots: d.shots, elements: d.elements, stateRegistry: d.stateRegistry, styleAnchor: d.styleAnchor})
-        d.imagePrompts = result.imagePrompts
-        break
-      case 6:
-        // Motion prompts — requires start frame notes from user
-        result = await callAPI(6, {shots: d.shots, startFrameNotes: state.startFrameNotes})
-        d.motionPrompts = result.motionPrompts
-        break
-      case 7:
-        result = await callAPI(7, {story: d.story, brief: d.brief})
-        d.narration = result
-        break
-      case 8:
-        result = await callAPI(8, {story: d.story, shots: d.shots})
-        d.music = result
-        break
-      case 9:
-        result = await callAPI(9, {brief: d.brief, shots: d.shots, narration: d.narration})
-        d.assembly = result
-        break
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Video Production Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg0: #080810;
+      --bg1: #0d0d18;
+      --bg2: #131320;
+      --bg3: #1a1a2e;
+      --border: #252540;
+      --border-a: #5b4fff;
+      --accent: #5b4fff;
+      --accent2: #9d8fff;
+      --gold: #e8b84b;
+      --green: #00c896;
+      --red: #ff5e5e;
+      --orange: #ff9640;
+      --t1: #eeeef8;
+      --t2: #9090b8;
+      --t3: #555570;
+      --mono: 'Space Mono', monospace;
+      --sans: 'DM Sans', system-ui, sans-serif;
     }
 
-    state.stages[idx] = {generated:true, approved:false, generating:false, error:null}
-  } catch(err) {
-    state.stages[idx] = {generated:false, approved:false, generating:false, error:err.message}
-  }
-  render()
-}
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
 
-function approve(idx) {
-  state.stages[idx].approved = true
-  if (idx < 9) {
-    state.active = idx + 1
-    // Stages 2-9 auto-generate; stage 6 needs user action first
-    if (idx + 1 !== 6) {
-      generateStage(idx + 1)
-    } else {
-      state.stages[6] = {generated:false, approved:false, generating:false, error:null}
+    body {
+      background: var(--bg0);
+      color: var(--t1);
+      font-family: var(--sans);
+      overflow-x: hidden
+    }
+
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg0)
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--accent)
+    }
+
+    .app {
+      display: flex;
+      height: 100vh;
+      overflow: hidden
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 255px;
+      min-width: 255px;
+      background: var(--bg1);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column
+    }
+
+    .sb-logo {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px
+    }
+
+    .sb-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0
+    }
+
+    .sb-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--t1);
+      letter-spacing: .1em
+    }
+
+    .sb-sub {
+      font-family: var(--mono);
+      font-size: 8px;
+      color: var(--t3);
+      letter-spacing: .18em;
+      margin-top: 1px
+    }
+
+    .sb-nav {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px
+    }
+
+    .sb-btn {
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      padding: 8px 11px;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all .15s;
+      color: var(--t2);
+      font-family: var(--sans)
+    }
+
+    .sb-btn:disabled {
+      opacity: .3;
+      cursor: not-allowed
+    }
+
+    .sb-btn:not(:disabled):hover {
+      background: var(--bg3);
+      border-color: var(--border)
+    }
+
+    .sb-btn.active {
+      background: rgba(91, 79, 255, .12);
+      border-color: var(--accent);
+      color: var(--accent2)
+    }
+
+    .sb-btn.done {
+      color: var(--green)
+    }
+
+    .sb-btn-ico {
+      font-size: 13px;
+      width: 18px;
+      text-align: center;
+      flex-shrink: 0
+    }
+
+    .sb-btn-num {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--t3)
+    }
+
+    .sb-btn-name {
+      font-size: 11px;
+      font-weight: 500;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    .sb-badge {
+      font-family: var(--mono);
+      font-size: 8px;
+      padding: 2px 5px;
+      border-radius: 3px
+    }
+
+    .sb-badge-done {
+      background: rgba(0, 200, 150, .1);
+      color: var(--green);
+      border: 1px solid rgba(0, 200, 150, .2)
+    }
+
+    .sb-badge-gate {
+      background: rgba(255, 94, 94, .1);
+      color: var(--red);
+      border: 1px solid rgba(255, 94, 94, .2)
+    }
+
+    .sb-progress {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border)
+    }
+
+    .sb-prog-row {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--t3);
+      margin-bottom: 7px
+    }
+
+    .sb-prog-row span:last-child {
+      color: var(--accent2)
+    }
+
+    .sb-track {
+      height: 3px;
+      background: var(--bg3);
+      border-radius: 2px;
+      overflow: hidden
+    }
+
+    .sb-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+      transition: width .8s ease
+    }
+
+    /* MAIN */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden
+    }
+
+    .topbar {
+      height: 46px;
+      min-height: 46px;
+      background: var(--bg1);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 22px;
+      gap: 14px;
+      overflow-x: auto
+    }
+
+    .tb-block {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--mono);
+      font-size: 10px;
+      white-space: nowrap
+    }
+
+    .tb-k {
+      color: var(--t3)
+    }
+
+    .tb-v {
+      color: var(--gold)
+    }
+
+    .tb-vs {
+      color: var(--accent2)
+    }
+
+    .tb-vd {
+      color: var(--green)
+    }
+
+    .tb-va {
+      color: var(--orange)
+    }
+
+    .tb-sep {
+      color: var(--border)
+    }
+
+    .content {
+      flex: 1;
+      overflow-y: auto
+    }
+
+    .inner {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 32px 28px
+    }
+
+    /* STAGE HEADER */
+    .sh {
+      margin-bottom: 28px
+    }
+
+    .sh-tags {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap
+    }
+
+    .sh-badge {
+      font-family: var(--mono);
+      font-size: 9px;
+      padding: 3px 8px;
+      border-radius: 4px
+    }
+
+    .sh-num {
+      color: var(--accent);
+      background: rgba(91, 79, 255, .12);
+      border: 1px solid rgba(91, 79, 255, .25)
+    }
+
+    .sh-ok {
+      color: var(--green);
+      background: rgba(0, 200, 150, .1);
+      border: 1px solid rgba(0, 200, 150, .25)
+    }
+
+    .sh-blocked {
+      color: var(--red);
+      background: rgba(255, 94, 94, .1);
+      border: 1px solid rgba(255, 94, 94, .25)
+    }
+
+    .sh-title {
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--t1)
+    }
+
+    .sh-desc {
+      font-size: 13px;
+      color: var(--t2);
+      margin-top: 5px;
+      line-height: 1.6
+    }
+
+    /* CARD */
+    .card {
+      background: linear-gradient(135deg, rgba(22, 22, 40, .8), rgba(26, 26, 48, .5));
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 14px;
+      transition: border-color .2s
+    }
+
+    .card:hover {
+      border-color: rgba(91, 79, 255, .35)
+    }
+
+    /* CODE BLOCK + COPY */
+    .copy-wrap {
+      position: relative;
+      margin-bottom: 12px
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 10;
+      background: rgba(91, 79, 255, .18);
+      border: 1px solid rgba(91, 79, 255, .35);
+      color: var(--accent2);
+      font-family: var(--mono);
+      font-size: 9px;
+      padding: 4px 9px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all .15s;
+      letter-spacing: .04em
+    }
+
+    .copy-btn:hover {
+      background: rgba(91, 79, 255, .3)
+    }
+
+    .copy-btn.ok {
+      background: rgba(0, 200, 150, .18);
+      border-color: rgba(0, 200, 150, .35);
+      color: var(--green)
+    }
+
+    pre.cb {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      line-height: 1.8;
+      background: #090914;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--t1)
+    }
+
+    /* EXPANDABLE */
+    .xp {
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      margin-bottom: 7px;
+      overflow: hidden;
+      transition: border-color .2s
+    }
+
+    .xp.open {
+      border-color: var(--accent)
+    }
+
+    .xp-hd {
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: background .15s;
+      font-family: var(--sans)
+    }
+
+    .xp.open .xp-hd,
+    .xp-hd:hover {
+      background: rgba(91, 79, 255, .06)
+    }
+
+    .xp-left {
+      display: flex;
+      align-items: center;
+      gap: 9px
+    }
+
+    .xp-arrow {
+      font-size: 8px;
+      color: var(--t3);
+      transition: transform .2s
+    }
+
+    .xp.open .xp-arrow {
+      transform: rotate(90deg)
+    }
+
+    .xp-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--t1)
+    }
+
+    .xp-badge {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--t3);
+      background: var(--bg2);
+      padding: 2px 7px;
+      border-radius: 3px;
+      border: 1px solid var(--border)
+    }
+
+    .xp-hint {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--t3)
+    }
+
+    .xp-body {
+      padding: 14px 16px;
+      border-top: 1px solid var(--border)
+    }
+
+    /* FIELD ROW */
+    .fr {
+      display: flex;
+      gap: 10px;
+      padding: 7px 0;
+      border-bottom: 1px solid rgba(37, 37, 64, .5)
+    }
+
+    .fr:last-child {
+      border-bottom: none
+    }
+
+    .frl {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--accent2);
+      width: 150px;
+      flex-shrink: 0;
+      padding-top: 1px
+    }
+
+    .frv {
+      font-size: 12px;
+      color: var(--t1);
+      line-height: 1.6
+    }
+
+    /* SECTION TITLE */
+    .st {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--t1);
+      margin: 24px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 7px
+    }
+
+    .lbl {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      color: var(--accent2);
+      text-transform: uppercase
+    }
+
+    /* GRIDS */
+    .g2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px
+    }
+
+    .g3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px
+    }
+
+    /* INFO BOX */
+    .ib {
+      border-radius: 8px;
+      padding: 13px 16px;
+      margin-bottom: 14px
+    }
+
+    .ib.purple {
+      background: rgba(91, 79, 255, .07);
+      border: 1px solid rgba(91, 79, 255, .2)
+    }
+
+    .ib.green {
+      background: rgba(0, 200, 150, .06);
+      border: 1px solid rgba(0, 200, 150, .2)
+    }
+
+    .ib.gold {
+      background: rgba(232, 184, 75, .07);
+      border: 1px solid rgba(232, 184, 75, .2)
+    }
+
+    .ib.red {
+      background: rgba(255, 94, 94, .06);
+      border: 1px solid rgba(255, 94, 94, .2)
+    }
+
+    .ib-checks {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      margin-top: 9px
+    }
+
+    .ib-check {
+      font-size: 11px;
+      color: var(--t2);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px
+    }
+
+    .ib-check::before {
+      content: '✓';
+      color: var(--green);
+      flex-shrink: 0
+    }
+
+    /* IDEA CARD */
+    .idea {
+      padding: 10px 12px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: rgba(20, 20, 36, .6);
+      transition: all .15s
+    }
+
+    .idea.sel {
+      border-color: var(--gold);
+      background: rgba(232, 184, 75, .07)
+    }
+
+    .idea-num {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--t3)
+    }
+
+    .idea-cat {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--accent2);
+      font-weight: 700;
+      display: block;
+      margin: 2px 0
+    }
+
+    .idea-txt {
+      font-size: 11px;
+      color: var(--t2);
+      line-height: 1.5
+    }
+
+    /* EMOTIONAL ANCHOR */
+    .ea {
+      background: rgba(91, 79, 255, .08);
+      border: 2px solid rgba(91, 79, 255, .4);
+      border-radius: 9px;
+      padding: 16px 20px;
+      margin-bottom: 20px
+    }
+
+    .ea-lbl {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--accent);
+      letter-spacing: .15em;
+      font-weight: 700;
+      margin-bottom: 7px
+    }
+
+    .ea-txt {
+      font-size: 14px;
+      color: var(--t1);
+      line-height: 1.65;
+      font-style: italic
+    }
+
+    /* STORY PHASE */
+    .phase {
+      margin-bottom: 18px
+    }
+
+    .phase-lbl {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 7px
+    }
+
+    .phase-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0
+    }
+
+    .phase-time {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--t3)
+    }
+
+    .phase-txt {
+      font-size: 12px;
+      color: var(--t1);
+      line-height: 1.8;
+      padding-left: 16px
+    }
+
+    /* ANCHOR BOX */
+    .anch {
+      border: 2px solid var(--accent);
+      border-radius: 9px;
+      overflow: hidden
+    }
+
+    .anch-hd {
+      background: rgba(91, 79, 255, .12);
+      padding: 9px 16px;
+      border-bottom: 1px solid var(--accent);
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--accent2);
+      font-weight: 700
+    }
+
+    /* STATE ENTRY */
+    .se {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 7px 11px;
+      margin-bottom: 5px
+    }
+
+    .se-shot {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--gold)
+    }
+
+    .se-txt {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--t1);
+      line-height: 1.6
+    }
+
+    /* TABLE */
+    .dt {
+      width: 100%;
+      font-family: var(--mono);
+      font-size: 10px;
+      border-collapse: collapse
+    }
+
+    .dt th {
+      text-align: left;
+      padding: 7px 11px;
+      color: var(--accent2);
+      border-bottom: 1px solid var(--border)
+    }
+
+    .dt td {
+      padding: 6px 11px;
+      border-bottom: 1px solid rgba(37, 37, 64, .4);
+      color: var(--t1)
+    }
+
+    .dt tfoot td {
+      border-top: 2px solid var(--accent);
+      color: var(--green);
+      font-weight: 700
+    }
+
+    .td-g {
+      color: var(--gold)
+    }
+
+    .td-m {
+      color: var(--t2)
+    }
+
+    tr.dissolve {
+      background: rgba(232, 184, 75, .04)
+    }
+
+    /* TIMELINE */
+    .tl-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 9px 13px;
+      margin-bottom: 5px
+    }
+
+    .tl-t {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--gold);
+      width: 42px;
+      flex-shrink: 0
+    }
+
+    .tl-bar {
+      flex: 0 0 70px;
+      height: 3px;
+      background: var(--bg3);
+      border-radius: 2px;
+      overflow: hidden
+    }
+
+    .tl-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px
+    }
+
+    .tl-v {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--t3);
+      width: 28px;
+      text-align: right
+    }
+
+    .tl-e {
+      font-size: 11px;
+      color: var(--t2);
+      flex: 1
+    }
+
+    /* TAGS */
+    .tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin: 2px
+    }
+
+    .tag-a {
+      background: rgba(91, 79, 255, .15);
+      color: var(--accent2);
+      border: 1px solid rgba(91, 79, 255, .3)
+    }
+
+    .tag-r {
+      background: rgba(255, 94, 94, .12);
+      color: var(--red);
+      border: 1px solid rgba(255, 94, 94, .25)
+    }
+
+    /* ACTION BUTTONS */
+    .act {
+      margin-top: 36px;
+      padding-top: 22px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between
+    }
+
+    .btn-ok {
+      background: linear-gradient(135deg, var(--green), #00a878);
+      color: #000;
+      border: none;
+      padding: 10px 26px;
+      border-radius: 7px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all .2s;
+      font-family: var(--sans)
+    }
+
+    .btn-ok:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 18px rgba(0, 200, 150, .28)
+    }
+
+    .btn-regen {
+      background: transparent;
+      color: var(--gold);
+      border: 1px solid var(--gold);
+      padding: 10px 26px;
+      border-radius: 7px;
+      font-weight: 500;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all .2s;
+      font-family: var(--sans)
+    }
+
+    .btn-regen:hover {
+      background: rgba(232, 184, 75, .08);
+      transform: translateY(-2px)
+    }
+
+    .approved-ind {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(0, 200, 150, .08);
+      color: var(--green);
+      border: 1px solid rgba(0, 200, 150, .25);
+      padding: 10px 22px;
+      border-radius: 7px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700
+    }
+
+    /* GENERATING */
+    .gen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 380px
+    }
+
+    .gen-ico {
+      width: 66px;
+      height: 66px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin-bottom: 20px;
+      position: relative
+    }
+
+    .gen-ring {
+      position: absolute;
+      inset: -9px;
+      border: 2px solid rgba(91, 79, 255, .3);
+      border-radius: 22px;
+      animation: rp 2s ease-in-out infinite
+    }
+
+    @keyframes rp {
+
+      0%,
+      100% {
+        opacity: .3;
+        transform: scale(1)
+      }
+
+      50% {
+        opacity: .7;
+        transform: scale(1.05)
+      }
+    }
+
+    .gen-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--t1);
+      margin-bottom: 6px
+    }
+
+    .gen-stage {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--accent2);
+      margin-bottom: 5px
+    }
+
+    .gen-msg {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--t3)
+    }
+
+    .gen-bar {
+      width: 160px;
+      height: 3px;
+      background: var(--bg3);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 20px
+    }
+
+    .gen-prog {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      animation: ga 2s ease-in-out infinite;
+      border-radius: 2px
+    }
+
+    @keyframes ga {
+      0% {
+        width: 15%
+      }
+
+      50% {
+        width: 80%
+      }
+
+      100% {
+        width: 15%
+      }
+    }
+
+    /* INPUT */
+    .inp-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px
+    }
+
+    .inp-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--accent2);
+      letter-spacing: .08em
+    }
+
+    textarea.inp {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      color: var(--t1);
+      font-family: var(--sans);
+      font-size: 13px;
+      line-height: 1.6;
+      resize: vertical;
+      min-height: 100px;
+      width: 100%;
+      transition: border-color .2s;
+      outline: none
+    }
+
+    textarea.inp:focus {
+      border-color: var(--accent)
+    }
+
+    input.inp {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--t1);
+      font-family: var(--sans);
+      font-size: 13px;
+      width: 100%;
+      transition: border-color .2s;
+      outline: none
+    }
+
+    input.inp:focus {
+      border-color: var(--accent)
+    }
+
+    .btn-gen {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      border: none;
+      padding: 11px 28px;
+      border-radius: 7px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: var(--sans);
+      transition: all .2s
+    }
+
+    .btn-gen:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 18px rgba(91, 79, 255, .3)
+    }
+
+    .btn-gen:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none
+    }
+
+    /* GATE */
+    .gate {
+      background: rgba(255, 94, 94, .05);
+      border: 2px solid rgba(255, 94, 94, .3);
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center
+    }
+
+    .gate-ico {
+      font-size: 36px;
+      margin-bottom: 12px
+    }
+
+    .gate-title {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--red);
+      margin-bottom: 9px;
+      letter-spacing: .1em
+    }
+
+    .gate-desc {
+      font-size: 12px;
+      color: var(--t2);
+      line-height: 1.7;
+      max-width: 460px;
+      margin: 0 auto 16px
+    }
+
+    .gate-rule {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: rgba(255, 94, 94, .7);
+      background: rgba(255, 94, 94, .06);
+      border: 1px solid rgba(255, 94, 94, .15);
+      border-radius: 6px;
+      padding: 11px 14px;
+      text-align: left;
+      margin-top: 14px;
+      line-height: 1.9
+    }
+
+    /* COMPLETION */
+    .done-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100%;
+      padding: 50px 24px;
+      text-align: center
+    }
+
+    .done-ico {
+      font-size: 60px;
+      margin-bottom: 18px
+    }
+
+    .done-title {
+      font-size: 34px;
+      font-weight: 600;
+      margin-bottom: 8px
+    }
+
+    .done-sub {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent2);
+      margin-bottom: 10px
+    }
+
+    .done-desc {
+      font-size: 12px;
+      color: var(--t2);
+      max-width: 420px;
+      line-height: 1.7;
+      margin-bottom: 28px
+    }
+
+    .done-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      max-width: 560px;
+      width: 100%;
+      margin: 0 auto 28px
+    }
+
+    .done-stage {
+      background: rgba(0, 200, 150, .08);
+      border: 1px solid rgba(0, 200, 150, .2);
+      border-radius: 7px;
+      padding: 10px 6px;
+      text-align: center
+    }
+
+    .done-stage-name {
+      font-family: var(--mono);
+      font-size: 8px;
+      color: var(--green);
+      line-height: 1.3;
+      margin-top: 4px
+    }
+
+    .next-box {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      max-width: 440px;
+      width: 100%;
+      text-align: left
+    }
+
+    .next-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: .1em
+    }
+
+    .next-item {
+      font-size: 12px;
+      color: var(--t2);
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(37, 37, 64, .4)
+    }
+
+    .next-item:last-child {
+      border-bottom: none
+    }
+
+    /* ERROR */
+    .err {
+      background: rgba(255, 94, 94, .08);
+      border: 1px solid rgba(255, 94, 94, .3);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--red);
+      margin-bottom: 14px
+    }
+
+    .anim {
+      animation: fu .4s ease-out forwards
+    }
+
+    @keyframes fu {
+      from {
+        opacity: 0;
+        transform: translateY(14px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg)
+      }
+
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    /* UPLOAD */
+    .up-zone {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+      transition: all .2s;
+      cursor: pointer;
+      background: rgba(91, 79, 255, .03);
+      margin-bottom: 18px
+    }
+
+    .up-zone:hover,
+    .up-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(91, 79, 255, .08)
+    }
+
+    .up-zone-ico {
+      font-size: 32px;
+      margin-bottom: 8px
+    }
+
+    .up-zone-txt {
+      font-size: 12px;
+      color: var(--t2)
+    }
+
+    .up-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px
+    }
+
+    .up-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative
+    }
+
+    .up-img-wrap {
+      aspect-ratio: 16/9;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative
+    }
+
+    .up-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover
+    }
+
+    .up-remove {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(255, 94, 94, .8);
+      color: #fff;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      cursor: pointer;
+      z-index: 10
+    }
+
+    .up-remove:hover {
+      background: var(--red)
+    }
+
+    .up-info {
+      padding: 8px
+    }
+
+    .up-sel {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--t1);
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 4px;
+      border-radius: 4px;
+      outline: none
+    }
+
+    .up-sel:focus {
+      border-color: var(--accent)
+    }
+
+    .up-badge {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      background: rgba(91, 79, 255, .1);
+      border-top: 1px solid var(--border);
+      border-left: 1px solid var(--border);
+      padding: 2px 10px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--accent2);
+      border-top-left-radius: 6px
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <div class="sb-logo">
+        <div class="sb-icon">🎬</div>
+        <div>
+          <div class="sb-title">AI VIDEO</div>
+          <div class="sb-sub">PRODUCTION PIPELINE</div>
+        </div>
+      </div>
+      <nav class="sb-nav" id="sbNav"></nav>
+      <div class="sb-progress">
+        <div class="sb-prog-row"><span>PIPELINE PROGRESS</span><span id="progLabel">0 / 10</span></div>
+        <div class="sb-track">
+          <div class="sb-fill" id="progFill" style="width:0%"></div>
+        </div>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar" id="topbar"></header>
+      <div class="content">
+        <div class="inner" id="inner"></div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // ============================================================
+    // CONSTANTS
+    // ============================================================
+    const NAMES = ['Creative Brief', 'Story Generation', 'Reference Image Analysis', 'Element Registry', 'Storyboard & Shot Breakdown', 'Image Prompts', 'Motion Prompts', 'Narration', 'Music', 'Assembly Guide']
+    const ICONS = ['📋', '✍️', '🖼️', '📦', '🎬', '🖌️', '🎥', '🗣️', '🎵', '🏗️']
+    const DESCS = [
+      'Describe your video concept. The AI will generate a complete creative brief.',
+      'Emotion-driven story built from an Emotional Anchor. Every beat is filmable.',
+      'Visual style analyzed and locked. Style Anchor generated for consistency.',
+      'All recurring visual elements registered as inject-ready prompt fragments.',
+      'Story broken into individual shots with camera planning and continuity rules.',
+      'Self-contained image prompts generated for every shot\'s start frame.',
+      '⚠️ HARD GATE — Upload actual generated start frame images before proceeding.',
+      'Narration assessment complete. Minimal approach recommended.',
+      'Musical score direction, timeline, and SFX notes mapped to story structure.',
+      'Complete assembly guide with timecodes, transitions, color grade, and export.',
+    ]
+    const MSGS = ['Analyzing concept parameters...', 'Constructing narrative architecture...', 'Processing visual reference data...', 'Building element registry fragments...', 'Planning camera choreography...', 'Engineering image prompts...', 'Calculating motion vectors...', 'Composing narration script...', 'Mapping musical architecture...', 'Compiling assembly blueprint...']
+    const PHASE_COLORS = { opening: '#74b9ff', discovery: '#a29bfe', escalation: '#fdcb6e', turningPoint: '#ff5e5e', resolution: '#00c896' }
+    const PHASE_LABELS = { opening: 'OPENING', discovery: 'DISCOVERY', escalation: 'ESCALATION', turningPoint: 'TURNING POINT', resolution: 'RESOLUTION' }
+    const PHASE_TIMES = { opening: '0–8s', discovery: '8–18s', escalation: '18–35s', turningPoint: '35–50s', resolution: '50–60s' }
+
+    // ============================================================
+    // STATE
+    // ============================================================
+    const state = {
+      active: 0,
+      stages: Array.from({ length: 10 }, () => ({ generated: false, approved: false, generating: false, error: null })),
+      data: {
+        brief: null, story: null, styleAnchor: null, refAnalysis: null,
+        elements: null, stateRegistry: null, shots: null,
+        imagePrompts: null, motionPrompts: null,
+        narration: null, music: null, assembly: null
+      },
+      userInput: '',
+      startFrameNotes: '',
+      startFrameImages: [],
+      narrationChoice: null
+    }
+
+    // ============================================================
+    // API CALL
+    // ============================================================
+    async function callAPI(stage, context) {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage, context })
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) throw new Error(json.error || 'API error')
+      return json.data
+    }
+
+    // ============================================================
+    // GENERATE STAGE
+    // ============================================================
+    async function generateStage(idx) {
+      state.stages[idx] = { generated: false, approved: false, generating: true, error: null }
+      render()
+
+      try {
+        let result
+        const d = state.data
+
+        switch (idx) {
+          case 0:
+            result = await callAPI(0, { userInput: state.userInput })
+            d.brief = result
+            break
+          case 1:
+            result = await callAPI(1, { brief: d.brief })
+            d.story = result
+            break
+          case 2:
+            result = await callAPI(2, { brief: d.brief, story: d.story })
+            d.refAnalysis = result
+            d.styleAnchor = result.styleAnchor
+            break
+          case 3:
+            result = await callAPI(3, { story: d.story, styleAnchor: d.styleAnchor })
+            d.elements = result.elements
+            d.stateRegistry = result.stateRegistry
+            break
+          case 4:
+            result = await callAPI(4, { story: d.story })
+            d.shots = result.shots
+            break
+          case 5:
+            result = await callAPI(5, { shots: d.shots, elements: d.elements, stateRegistry: d.stateRegistry, styleAnchor: d.styleAnchor })
+            d.imagePrompts = result.imagePrompts
+            break
+          case 6:
+            // Motion prompts — requires start frame notes AND images from user
+            result = await callAPI(6, {
+              shots: d.shots,
+              startFrameNotes: state.startFrameNotes,
+              images: state.startFrameImages
+            })
+            d.motionPrompts = result.motionPrompts
+            break
+          case 7:
+            result = await callAPI(7, { story: d.story, brief: d.brief })
+            d.narration = result
+            break
+          case 8:
+            result = await callAPI(8, { story: d.story, shots: d.shots })
+            d.music = result
+            break
+          case 9:
+            result = await callAPI(9, { brief: d.brief, shots: d.shots, narration: d.narration })
+            d.assembly = result
+            break
+        }
+
+        state.stages[idx] = { generated: true, approved: false, generating: false, error: null }
+      } catch (err) {
+        state.stages[idx] = { generated: false, approved: false, generating: false, error: err.message }
+      }
       render()
     }
-  }
-  render()
-}
 
-function regen(idx) {
-  generateStage(idx)
-}
+    function approve(idx) {
+      state.stages[idx].approved = true
 
-function goTo(idx) {
-  if (state.stages[idx].generated || state.stages[idx].generating || idx === state.active) {
-    state.active = idx
-    render()
-  }
-}
+      // Persistence for Stage 7 (Narration)
+      if (idx === 7 && state.data.narration) {
+        state.data.narration.finalChoice = state.narrationChoice
+      }
 
-// ============================================================
-// HELPERS
-// ============================================================
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+      if (idx < 9) {
+        state.active = idx + 1
+        // Stages 2-9 auto-generate; stage 6 needs user action first
+        if (idx + 1 !== 6) {
+          generateStage(idx + 1)
+        } else {
+          state.stages[6] = { generated: false, approved: false, generating: false, error: null }
+          render()
+        }
+      }
+      render()
+    }
 
-function copyBlock(text, label='COPY') {
-  const id = 'cb_' + Math.random().toString(36).slice(2,8)
-  return `<div class="copy-wrap">
+    function regen(idx) {
+      generateStage(idx)
+    }
+
+    function goTo(idx) {
+      if (state.stages[idx].generated || state.stages[idx].generating || idx === state.active) {
+        state.active = idx
+        render()
+      }
+    }
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+
+    function copyBlock(text, label = 'COPY') {
+      const id = 'cb_' + Math.random().toString(36).slice(2, 8)
+      return `<div class="copy-wrap">
     <button class="copy-btn" onclick="doCopy('${id}',this)">${label}</button>
     <pre class="cb" id="${id}">${esc(text)}</pre>
   </div>`
-}
+    }
 
-function doCopy(id, btn) {
-  navigator.clipboard.writeText(document.getElementById(id).innerText).then(() => {
-    btn.textContent = '✓ COPIED'; btn.classList.add('ok')
-    setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('ok') }, 2000)
-  })
-}
+    function doCopy(id, btn) {
+      navigator.clipboard.writeText(document.getElementById(id).innerText).then(() => {
+        btn.textContent = '✓ COPIED'; btn.classList.add('ok')
+        setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('ok') }, 2000)
+      })
+    }
 
-function xp(key, title, badge, bodyHtml) {
-  return `<div class="xp" id="xpw_${key}">
+    function xp(key, title, badge, bodyHtml) {
+      return `<div class="xp" id="xpw_${key}">
     <button class="xp-hd" onclick="toggleXp('${key}')">
-      <div class="xp-left"><span class="xp-arrow">▶</span><span class="xp-title">${title}</span>${badge?`<span class="xp-badge">${badge}</span>`:''}</div>
+      <div class="xp-left"><span class="xp-arrow">▶</span><span class="xp-title">${title}</span>${badge ? `<span class="xp-badge">${badge}</span>` : ''}</div>
       <span class="xp-hint" id="xph_${key}">EXPAND</span>
     </button>
     <div class="xp-body" id="xpb_${key}" style="display:none">${bodyHtml}</div>
   </div>`
-}
+    }
 
-function toggleXp(key) {
-  const b = document.getElementById('xpb_' + key)
-  const w = document.getElementById('xpw_' + key)
-  const h = document.getElementById('xph_' + key)
-  const open = b.style.display !== 'none'
-  b.style.display = open ? 'none' : 'block'
-  w.classList.toggle('open', !open)
-  h.textContent = open ? 'EXPAND' : 'COLLAPSE'
-}
+    function toggleXp(key) {
+      const b = document.getElementById('xpb_' + key)
+      const w = document.getElementById('xpw_' + key)
+      const h = document.getElementById('xph_' + key)
+      const open = b.style.display !== 'none'
+      b.style.display = open ? 'none' : 'block'
+      w.classList.toggle('open', !open)
+      h.textContent = open ? 'EXPAND' : 'COLLAPSE'
+    }
 
-function actBtns(idx) {
-  if (state.stages[idx].approved) return `<div class="act" style="justify-content:center"><span class="approved-ind">✅ STAGE APPROVED</span></div>`
-  return `<div class="act">
+    function actBtns(idx) {
+      if (state.stages[idx].approved) return `<div class="act" style="justify-content:center"><span class="approved-ind">✅ STAGE APPROVED</span></div>`
+      return `<div class="act">
     <button class="btn-regen" onclick="regen(${idx})">🔄 Regenerate</button>
     <button class="btn-ok" onclick="approve(${idx})">✅ Approve & Continue →</button>
   </div>`
-}
+    }
 
-function getCompleted() { return state.stages.filter(s=>s.approved).length }
-function getAwaiting(idx) {
-  if (state.stages[idx].approved) return 'Approved ✓'
-  if (idx === 6 && !state.stages[idx].generated) return 'Upload start frames to unlock'
-  if (state.stages[idx].generating) return 'Generating...'
-  if (!state.stages[idx].generated) return 'Not started'
-  return 'Awaiting approval'
-}
+    function getCompleted() { return state.stages.filter(s => s.approved).length }
+    function getAwaiting(idx) {
+      if (state.stages[idx].approved) return 'Approved ✓'
+      if (idx === 6 && !state.stages[idx].generated) return 'Upload start frames to unlock'
+      if (state.stages[idx].generating) return 'Generating...'
+      if (!state.stages[idx].generated) return 'Not started'
+      return 'Awaiting approval'
+    }
 
-// ============================================================
-// SIDEBAR + TOPBAR
-// ============================================================
-function renderSidebar() {
-  document.getElementById('sbNav').innerHTML = NAMES.map((name,idx) => {
-    const s = state.stages[idx]
-    const isActive = idx === state.active
-    const accessible = s.generated || s.generating || idx === state.active
-    const isGate = idx === 6 && state.stages[5].approved && !s.generated
-    let ico = s.approved ? '✅' : s.generating
-      ? '<span style="display:inline-block;width:12px;height:12px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></span>'
-      : accessible ? ICONS[idx] : '🔒'
-    return `<button class="sb-btn ${isActive?'active':''} ${s.approved?'done':''}" ${!accessible&&!isActive?'disabled':''} onclick="goTo(${idx})">
+    // ============================================================
+    // UPLOAD HANDLERS
+    // ============================================================
+    function handleFileUpload(files) {
+      const shots = state.data.shots || []
+      Array.from(files).forEach((file, idx) => {
+        if (!file.type.startsWith('image/')) return
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          // Auto-assign to first unassigned shot or just sequentially
+          const usedShotIds = state.startFrameImages.map(img => img.shotId)
+          const nextShot = shots.find(s => !usedShotIds.includes(s.id)) || shots[0]
+
+          state.startFrameImages.push({
+            shotId: nextShot?.id || `Shot_${String(state.startFrameImages.length + 1).padStart(2, '0')}`,
+            dataUrl: e.target.result
+          })
+          render()
+        }
+        reader.readAsDataURL(file)
+      })
+    }
+
+    function removeImage(idx) {
+      state.startFrameImages.splice(idx, 1)
+      render()
+    }
+
+    function updateImageShotId(idx, shotId) {
+      state.startFrameImages[idx].shotId = shotId
+      render()
+    }
+
+    function triggerUpload() {
+      const inp = document.createElement('input')
+      inp.type = 'file'
+      inp.multiple = true
+      inp.accept = 'image/*'
+      inp.onchange = (e) => handleFileUpload(e.target.files)
+      inp.click()
+    }
+
+    // ============================================================
+    // SIDEBAR + TOPBAR
+    // ============================================================
+    function renderSidebar() {
+      document.getElementById('sbNav').innerHTML = NAMES.map((name, idx) => {
+        const s = state.stages[idx]
+        const isActive = idx === state.active
+        const accessible = s.generated || s.generating || idx === state.active
+        const isGate = idx === 6 && state.stages[5].approved && !s.generated
+        let ico = s.approved ? '✅' : s.generating
+          ? '<span style="display:inline-block;width:12px;height:12px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></span>'
+          : accessible ? ICONS[idx] : '🔒'
+        return `<button class="sb-btn ${isActive ? 'active' : ''} ${s.approved ? 'done' : ''}" ${!accessible && !isActive ? 'disabled' : ''} onclick="goTo(${idx})">
       <span class="sb-btn-ico">${ico}</span>
-      <span class="sb-btn-num">${idx+1}.</span>
+      <span class="sb-btn-num">${idx + 1}.</span>
       <span class="sb-btn-name">${name}</span>
-      ${s.approved?'<span class="sb-badge sb-badge-done">DONE</span>':''}
-      ${isGate?'<span class="sb-badge sb-badge-gate">GATE</span>':''}
+      ${s.approved ? '<span class="sb-badge sb-badge-done">DONE</span>' : ''}
+      ${isGate ? '<span class="sb-badge sb-badge-gate">GATE</span>' : ''}
     </button>`
-  }).join('')
-  const c = getCompleted()
-  document.getElementById('progLabel').textContent = `${c} / 10`
-  document.getElementById('progFill').style.width = `${c*10}%`
-}
+      }).join('')
+      const c = getCompleted()
+      document.getElementById('progLabel').textContent = `${c} / 10`
+      document.getElementById('progFill').style.width = `${c * 10}%`
+    }
 
-function renderTopbar() {
-  const completed = state.stages.map((s,i)=>s.approved?i+1:null).filter(Boolean).join(', ') || 'None'
-  document.getElementById('topbar').innerHTML = `<div class="tb-block">
+    function renderTopbar() {
+      const completed = state.stages.map((s, i) => s.approved ? i + 1 : null).filter(Boolean).join(', ') || 'None'
+      document.getElementById('topbar').innerHTML = `<div class="tb-block">
     <span class="tb-k">[PROJECT STATE]</span>
     <span>Project: <span class="tb-v">${state.data.brief?.title || 'Not started'}</span></span>
     <span class="tb-sep">|</span>
-    <span>Stage: <span class="tb-vs">${state.active+1} — ${NAMES[state.active]}</span></span>
+    <span>Stage: <span class="tb-vs">${state.active + 1} — ${NAMES[state.active]}</span></span>
     <span class="tb-sep">|</span>
     <span>Completed: <span class="tb-vd">${completed}</span></span>
     <span class="tb-sep">|</span>
     <span>Awaiting: <span class="tb-va">${getAwaiting(state.active)}</span></span>
   </div>`
-}
+    }
 
-// ============================================================
-// STAGE RENDERERS
-// ============================================================
-function renderStage0() {
-  const d = state.data.brief
-  if (!d) return `
+    // ============================================================
+    // STAGE RENDERERS
+    // ============================================================
+    function renderStage0() {
+      const d = state.data.brief
+      if (!d) return `
     <div class="anim">
       <div class="inp-wrap">
         <label class="inp-label">DESCRIBE YOUR VIDEO CONCEPT</label>
@@ -501,31 +1684,31 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
       <button class="btn-gen" onclick="startPipeline()" id="startBtn">🎬 Generate Creative Brief</button>
     </div>`
 
-  return `<div class="anim">${copyBlock(
-    `PROJECT TITLE     : ${d.title}\nVIDEO TYPE        : ${d.videoType}\nDURATION          : ${d.duration}\nASPECT RATIO      : ${d.aspectRatio}\nTARGET AUDIENCE   : ${d.targetAudience}\nLANGUAGE          : ${d.language}\nVISUAL STYLE      : (Confirmed after reference image in Stage 3)\n\nNARRATIVE DRIVER  : ${d.narrativeDriver}\nEMOTIONAL TONE    : ${d.emotionalTone}\nPACING            : ${d.pacing}\nSOUND DESIGN NOTE : ${d.soundDesign}`
-  )}</div>`
-}
+      return `<div class="anim">${copyBlock(
+        `PROJECT TITLE     : ${d.title}\nVIDEO TYPE        : ${d.videoType}\nDURATION          : ${d.duration}\nASPECT RATIO      : ${d.aspectRatio}\nTARGET AUDIENCE   : ${d.targetAudience}\nLANGUAGE          : ${d.language}\nVISUAL STYLE      : (Confirmed after reference image in Stage 3)\n\nNARRATIVE DRIVER  : ${d.narrativeDriver}\nEMOTIONAL TONE    : ${d.emotionalTone}\nPACING            : ${d.pacing}\nSOUND DESIGN NOTE : ${d.soundDesign}`
+      )}</div>`
+    }
 
-function startPipeline() {
-  const val = document.getElementById('userInput')?.value?.trim()
-  if (!val) return
-  state.userInput = val
-  generateStage(0)
-}
+    function startPipeline() {
+      const val = document.getElementById('userInput')?.value?.trim()
+      if (!val) return
+      state.userInput = val
+      generateStage(0)
+    }
 
-function renderStage1() {
-  const d = state.data.story
-  if (!d) return '<div class="gen-msg" style="color:var(--t3);font-family:var(--mono);font-size:12px;padding:20px">Waiting...</div>'
+    function renderStage1() {
+      const d = state.data.story
+      if (!d) return '<div class="gen-msg" style="color:var(--t3);font-family:var(--mono);font-size:12px;padding:20px">Waiting...</div>'
 
-  const ideasHtml = (d.ideas||[]).map((idea,i) => `
-    <div class="idea ${i===d.selectedIdea?'sel':''}">
-      <span class="idea-num">${String(i+1).padStart(2,'0')}</span>
+      const ideasHtml = (d.ideas || []).map((idea, i) => `
+    <div class="idea ${i === d.selectedIdea ? 'sel' : ''}">
+      <span class="idea-num">${String(i + 1).padStart(2, '0')}</span>
       <span class="idea-cat">${esc(idea.cat)}</span>
       <span class="idea-txt">${esc(idea.idea)}</span>
     </div>`).join('')
 
-  const phasesHtml = ['opening','discovery','escalation','turningPoint','resolution'].map(k =>
-    d[k] ? `<div class="phase">
+      const phasesHtml = ['opening', 'discovery', 'escalation', 'turningPoint', 'resolution'].map(k =>
+        d[k] ? `<div class="phase">
       <div class="phase-lbl">
         <div class="phase-dot" style="background:${PHASE_COLORS[k]}"></div>
         <span class="lbl">${PHASE_LABELS[k]}</span>
@@ -533,76 +1716,76 @@ function renderStage1() {
       </div>
       <p class="phase-txt">${esc(d[k])}</p>
     </div>` : ''
-  ).join('')
+      ).join('')
 
-  return `<div class="anim">
+      return `<div class="anim">
     <div class="ea">
       <div class="ea-lbl">⚡ EMOTIONAL ANCHOR</div>
-      <div class="ea-txt">${esc(d.emotionalAnchor||'')}</div>
+      <div class="ea-txt">${esc(d.emotionalAnchor || '')}</div>
     </div>
     <div class="st">💡 Idea Space</div>
     <div class="g2" style="margin-bottom:24px">${ideasHtml}</div>
-    <div class="st">📖 Story — "${esc(d.title||'')}"</div>
+    <div class="st">📖 Story — "${esc(d.title || '')}"</div>
     <div class="card">
       <div class="g2" style="margin-bottom:16px">
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:14px">
-          <div class="lbl">${esc(d.char1?.name||'')}</div>
-          <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(d.char1?.desc||'')}</p>
+          <div class="lbl">${esc(d.char1?.name || '')}</div>
+          <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(d.char1?.desc || '')}</p>
         </div>
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:14px">
-          <div class="lbl">${esc(d.char2?.name||'')}</div>
-          <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(d.char2?.desc||'')}</p>
+          <div class="lbl">${esc(d.char2?.name || '')}</div>
+          <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(d.char2?.desc || '')}</p>
         </div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:11px 14px;margin-bottom:18px">
         <div class="lbl" style="margin-bottom:4px">CORE INTERACTION</div>
-        <p style="font-size:13px;color:var(--gold)">${esc(d.coreIdea||'')}</p>
+        <p style="font-size:13px;color:var(--gold)">${esc(d.coreIdea || '')}</p>
       </div>
       ${phasesHtml}
     </div>
     ${d.qualityChecks?.length ? `<div class="ib green"><div class="lbl">✓ QUALITY VERIFICATION</div>
-      <div class="ib-checks">${d.qualityChecks.map(c=>`<div class="ib-check">${esc(c)}</div>`).join('')}</div>
+      <div class="ib-checks">${d.qualityChecks.map(c => `<div class="ib-check">${esc(c)}</div>`).join('')}</div>
     </div>` : ''}
   </div>`
-}
+    }
 
-function renderStage2() {
-  const r = state.data.refAnalysis
-  if (!r) return ''
-  const rows = (obj, keys) => keys.map(([k,label]) => `<div class="fr"><span class="frl">${label}</span><span class="frv">${esc(r[k]||'')}</span></div>`).join('')
-  return `<div class="anim">
+    function renderStage2() {
+      const r = state.data.refAnalysis
+      if (!r) return ''
+      const rows = (obj, keys) => keys.map(([k, label]) => `<div class="fr"><span class="frl">${label}</span><span class="frv">${esc(r[k] || '')}</span></div>`).join('')
+      return `<div class="anim">
     <div class="g2" style="margin-bottom:14px">
       <div class="card"><div class="lbl" style="margin-bottom:10px">1. CORE AESTHETIC</div>
-        ${rows(r,[['renderingStyle','Rendering Style'],['materiality','Materiality'],['overallFinish','Overall Finish']])}</div>
+        ${rows(r, [['renderingStyle', 'Rendering Style'], ['materiality', 'Materiality'], ['overallFinish', 'Overall Finish']])}</div>
       <div class="card"><div class="lbl" style="margin-bottom:10px">2. CHARACTER DESIGN</div>
-        ${rows(r,[['proportions','Proportions'],['eyes','Eyes'],['facialFeatures','Facial Features'],['hair','Hair']])}</div>
+        ${rows(r, [['proportions', 'Proportions'], ['eyes', 'Eyes'], ['facialFeatures', 'Facial Features'], ['hair', 'Hair']])}</div>
       <div class="card"><div class="lbl" style="margin-bottom:10px">3. COLOR & LIGHTING</div>
-        ${rows(r,[['palette','Palette'],['lightingType','Lighting Type'],['shadowQuality','Shadow Quality'],['depthOfField','Depth of Field']])}</div>
+        ${rows(r, [['palette', 'Palette'], ['lightingType', 'Lighting Type'], ['shadowQuality', 'Shadow Quality'], ['depthOfField', 'Depth of Field']])}</div>
       <div class="card"><div class="lbl" style="margin-bottom:10px">4. TEXTURE & MATERIAL</div>
-        ${rows(r,[['skin','Skin'],['fabric','Fabric'],['environment','Environment']])}</div>
+        ${rows(r, [['skin', 'Skin'], ['fabric', 'Fabric'], ['environment', 'Environment']])}</div>
     </div>
     <div class="card" style="margin-bottom:20px"><div class="lbl">5. MOOD</div>
-      <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(r.mood||'')}</p></div>
+      <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(r.mood || '')}</p></div>
     <div class="st">🎯 Style Anchor <span style="font-size:10px;color:var(--t3);font-weight:400;font-family:var(--mono)">— Locked. Appended to every image prompt.</span></div>
-    <div class="anch"><div class="anch-hd">[STYLE ANCHOR]</div>${copyBlock(r.styleAnchor||'')}</div>
+    <div class="anch"><div class="anch-hd">[STYLE ANCHOR]</div>${copyBlock(r.styleAnchor || '')}</div>
   </div>`
-}
+    }
 
-function renderStage3() {
-  const els = state.data.elements || []
-  const states = state.data.stateRegistry || []
-  const anchor = state.data.styleAnchor || ''
+    function renderStage3() {
+      const els = state.data.elements || []
+      const states = state.data.stateRegistry || []
+      const anchor = state.data.styleAnchor || ''
 
-  const elCards = els.map((el,i) => xp('el'+i, el.name, el.type,
-    `<div style="font-family:var(--mono);font-size:9px;color:var(--accent2);margin-bottom:7px;font-weight:700">[Element_${esc(el.name)}]</div>
-     ${copyBlock((el.fragment||'') + '\nStyle: [STYLE ANCHOR applied]')}`
-  )).join('')
+      const elCards = els.map((el, i) => xp('el' + i, el.name, el.type,
+        `<div style="font-family:var(--mono);font-size:9px;color:var(--accent2);margin-bottom:7px;font-weight:700">[Element_${esc(el.name)}]</div>
+     ${copyBlock((el.fragment || '') + '\nStyle: [STYLE ANCHOR applied]')}`
+      )).join('')
 
-  const stCards = states.map((reg,i) => xp('st'+i, 'STATE — '+reg.element, `${(reg.states||[]).length} states`,
-    (reg.states||[]).map(s=>`<div class="se"><span class="se-shot">${esc(s.shot)}</span><span style="color:var(--t3);margin:0 6px">→</span><span class="se-txt">${esc(s.state)}</span></div>`).join('')
-  )).join('')
+      const stCards = states.map((reg, i) => xp('st' + i, 'STATE — ' + reg.element, `${(reg.states || []).length} states`,
+        (reg.states || []).map(s => `<div class="se"><span class="se-shot">${esc(s.shot)}</span><span style="color:var(--t3);margin:0 6px">→</span><span class="se-txt">${esc(s.state)}</span></div>`).join('')
+      )).join('')
 
-  return `<div class="anim">
+      return `<div class="anim">
     <div class="ib purple">
       <div class="lbl">📌 ELEMENT REGISTRY RULES</div>
       <div class="ib-checks" style="margin-top:9px">
@@ -617,20 +1800,20 @@ function renderStage3() {
     <p style="font-family:var(--mono);font-size:9px;color:var(--t3);margin-bottom:10px">Every physical change tracked per shot — hardcoded into all subsequent prompts</p>
     ${stCards}
   </div>`
-}
+    }
 
-function renderStage4() {
-  const shots = state.data.shots || []
-  const totalDur = shots.reduce((t,s)=>t+(s.duration||0),0)
-  const cards = shots.map((shot,i) => xp('sh'+i, shot.id, `${shot.duration}s • ${shot.type}`,
-    ['type','duration','camera','visual','motion','audio'].map(k=>
-      `<div class="fr"><span class="frl">${k.toUpperCase()}</span><span class="frv">${esc(shot[k]||'')}</span></div>`
-    ).join('')
-  )).join('')
-  const tableRows = shots.map(s =>
-    `<tr><td class="td-g">${esc((s.id||'').split('_').slice(0,2).join('_'))}</td><td>${esc(s.type||'')}</td><td style="text-align:right">${s.duration}s</td><td class="td-m">${esc((s.camera||'').split('|')[0]?.trim()||'')}</td></tr>`
-  ).join('')
-  return `<div class="anim">
+    function renderStage4() {
+      const shots = state.data.shots || []
+      const totalDur = shots.reduce((t, s) => t + (s.duration || 0), 0)
+      const cards = shots.map((shot, i) => xp('sh' + i, shot.id, `${shot.duration}s • ${shot.type}`,
+        ['type', 'duration', 'camera', 'visual', 'motion', 'audio'].map(k =>
+          `<div class="fr"><span class="frl">${k.toUpperCase()}</span><span class="frv">${esc(shot[k] || '')}</span></div>`
+        ).join('')
+      )).join('')
+      const tableRows = shots.map(s =>
+        `<tr><td class="td-g">${esc((s.id || '').split('_').slice(0, 2).join('_'))}</td><td>${esc(s.type || '')}</td><td style="text-align:right">${s.duration}s</td><td class="td-m">${esc((s.camera || '').split('|')[0]?.trim() || '')}</td></tr>`
+      ).join('')
+      return `<div class="anim">
     <div class="ib purple" style="margin-bottom:16px">
       <div class="lbl">CAMERA DIFFERENTIATION RULES APPLIED</div>
       <div class="ib-checks" style="margin-top:9px">
@@ -648,26 +1831,26 @@ function renderStage4() {
       <tfoot><tr><td colspan="2">TOTAL</td><td style="text-align:right">${totalDur}s</td><td class="td-m">Target: ~60s</td></tr></tfoot>
     </table>
   </div>`
-}
+    }
 
-function renderStage5() {
-  const prompts = state.data.imagePrompts || []
-  const shots = state.data.shots || []
-  const anchor = state.data.styleAnchor || ''
-  const cards = prompts.map((p,i) => xp('ip'+i, `${p.shotId} — Image Prompt`, shots[i]?.type||'',
-    `<div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">CAMERA</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.camera||'')}</p></div>
-     <div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">SCENE</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.scene||'')}</p></div>
-     <div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">CHARACTERS</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.chars||'')}</p></div>
-     <div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">STATE (from Registry)</div><p style="font-family:var(--mono);font-size:10px;color:var(--gold);line-height:1.7">${esc(p.state||'')}</p></div>
-     <div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">OBJECTS</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.objects||'')}</p></div>
+    function renderStage5() {
+      const prompts = state.data.imagePrompts || []
+      const shots = state.data.shots || []
+      const anchor = state.data.styleAnchor || ''
+      const cards = prompts.map((p, i) => xp('ip' + i, `${p.shotId} — Image Prompt`, shots[i]?.type || '',
+        `<div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">CAMERA</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.camera || '')}</p></div>
+     <div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">SCENE</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.scene || '')}</p></div>
+     <div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">CHARACTERS</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.chars || '')}</p></div>
+     <div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">STATE (from Registry)</div><p style="font-family:var(--mono);font-size:10px;color:var(--gold);line-height:1.7">${esc(p.state || '')}</p></div>
+     <div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">OBJECTS</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.objects || '')}</p></div>
      <div style="border-top:1px solid var(--accent);padding-top:12px;margin-top:4px">
        <div style="font-family:var(--mono);font-size:9px;color:var(--accent);font-weight:700;margin-bottom:7px">[STYLE ANCHOR — appended]</div>
        <pre style="font-family:var(--mono);font-size:9px;color:var(--t2);line-height:1.6;white-space:pre-wrap">${esc(anchor)}</pre>
      </div>
      <div style="margin-top:14px"><div class="lbl" style="margin-bottom:7px">FULL PROMPT (copy-paste ready)</div>
      ${copyBlock(p.fullPrompt || `CAMERA : ${p.camera}\n\nSCENE  : ${p.scene}\n\nCHARS  : ${p.chars}\n\nSTATE  : ${p.state}\n\nOBJECTS: ${p.objects}\n\n[STYLE ANCHOR]\n${anchor}`, 'COPY FULL PROMPT')}</div>`
-  )).join('')
-  return `<div class="anim">
+      )).join('')
+      return `<div class="anim">
     <div class="ib purple" style="margin-bottom:16px">
       <div class="lbl">PROMPT RULES APPLIED</div>
       <div class="ib-checks" style="margin-top:9px">
@@ -679,61 +1862,124 @@ function renderStage5() {
     </div>
     <div class="st">🖌️ Start Frame Image Prompts (${prompts.length} prompts)</div>${cards}
   </div>`
-}
+    }
 
-function renderStage6() {
-  const prompts = state.data.motionPrompts
-  const shots = state.data.shots || []
+    function renderStage6() {
+      const prompts = state.data.motionPrompts
+      const shots = state.data.shots || []
+      const uploaded = state.startFrameImages
 
-  const gateBox = `<div class="gate" style="margin-bottom:24px">
-    <div class="gate-ico">⚠️</div>
-    <div class="gate-title">HARD GATE — START FRAMES REQUIRED</div>
-    <div class="gate-desc">Motion prompts must be written from what is <strong>actually visible</strong> in your generated start frame images — not from the image prompt that created them.<br><br>
-    Generate your start frames using the Image Prompts from Stage 6, then note any discrepancies below before proceeding.</div>
-    <div style="text-align:left;margin-top:16px">
-      <div class="lbl" style="margin-bottom:8px">START FRAME NOTES (optional)</div>
-      <textarea class="inp" id="sfNotes" style="min-height:80px" placeholder="e.g. Shot_03: RAMI's boots are already in water (not at edge). Shot_07: sky is slightly blue (ignore overcast instruction).\n\nLeave blank if all start frames matched intent.">${state.startFrameNotes}</textarea>
-      <button class="btn-gen" style="margin-top:10px" onclick="unlockMotion()">🎥 Generate Motion Prompts</button>
+      const uploadArea = `
+    <div class="up-zone" id="upZone" 
+         onclick="triggerUpload()" 
+         ondragover="event.preventDefault(); this.classList.add('dragover')" 
+         ondragleave="this.classList.remove('dragover')"
+         ondrop="event.preventDefault(); this.classList.remove('dragover'); handleFileUpload(event.dataTransfer.files)">
+      <div class="up-zone-ico">📥</div>
+      <div class="up-zone-txt"><strong>Click to upload</strong> or drag & drop<br><span style="font-size:10px;color:var(--t3)">Upload generated start frames (JPG/PNG)</span></div>
     </div>
-    <div class="gate-rule">WHY THIS GATE EXISTS:\n→ Image generators do not always produce what was prompted\n→ Motion prompts written from assumptions will break continuity\n→ The start frame IS the source of truth — not the image prompt\n→ Flag discrepancies → user decides: regenerate image or accept & adapt</div>
+  `
+
+      const previewGrid = uploaded.length ? `
+    <div class="up-grid">
+      ${uploaded.map((img, i) => `
+        <div class="up-card anim">
+          <button class="up-remove" onclick="removeImage(${i})">×</button>
+          <div class="up-img-wrap">
+            <img src="${img.dataUrl}" class="up-img">
+            <div class="up-badge">${i + 1}</div>
+          </div>
+          <div class="up-info">
+            <select class="up-sel" onchange="updateImageShotId(${i}, this.value)">
+              ${shots.map(s => `<option value="${s.id}" ${img.shotId === s.id ? 'selected' : ''}>${s.id}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  ` : ''
+
+      const gateBox = `<div class="gate" style="margin-bottom:24px">
+    <div class="gate-ico">🖼️</div>
+    <div class="gate-title">STAGE 6: VISUAL CONTINUITY GATE</div>
+    <div class="gate-desc">Upload your actual generated start frames below. Gemini will analyze what was <strong>actually</strong> produced to ensure motion prompts are physically accurate.</div>
+    
+    <div style="text-align:left;margin-top:16px;background:var(--bg1);padding:18px;border-radius:8px;border:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="lbl">PIPELINE IMAGES <span style="color:var(--t3);font-weight:400">(${uploaded.length} / ${shots.length} uploaded)</span></div>
+      </div>
+      
+      ${uploadArea}
+      ${previewGrid}
+
+      <div class="lbl" style="margin-bottom:8px;margin-top:20px">DISCREPANCY NOTES (Optional)</div>
+      <textarea class="inp" id="sfNotes" style="min-height:70px;background:var(--bg0)" placeholder="Note any visual glitches or unintended details Gemini should know about...">${state.startFrameNotes}</textarea>
+      
+      <button class="btn-gen" style="margin-top:16px;width:100%" onclick="unlockMotion()">🎥 Generate Motion Prompts</button>
+    </div>
+    <div class="gate-rule">Why this exists: AI generators often deviate from exact prompt instructions. By uploading the actual results, we ensure the motion logic (Stage 7) continues exactly from where the image left off, preventing "ghosting" or sudden shifts.</div>
   </div>`
 
-  if (!prompts) return `<div class="anim">${gateBox}</div>`
+      if (!prompts) return `<div class="anim">${gateBox}</div>`
 
-  const cards = prompts.map((mp,i) => xp('mp'+i, `${mp.shotId} — Motion`, `${mp.duration}s`,
-    `${copyBlock(mp.motion, 'COPY MOTION PROMPT')}
+      const cards = prompts.map((mp, i) => xp('mp' + i, `${mp.shotId} — Motion`, `${mp.duration}s`,
+        `${copyBlock(mp.motion, 'COPY MOTION PROMPT')}
      <div class="g3" style="margin-top:12px">
-       <div><div class="lbl">CAMERA</div><p style="font-size:11px;color:var(--t1);margin-top:4px">${esc(mp.camera||'')}</p></div>
+       <div><div class="lbl">CAMERA</div><p style="font-size:11px;color:var(--t1);margin-top:4px">${esc(mp.camera || '')}</p></div>
        <div><div class="lbl">DURATION</div><p style="font-size:11px;color:var(--t1);margin-top:4px">${mp.duration}s</p></div>
-       <div><div class="lbl">SPEED</div><p style="font-size:11px;color:var(--t1);margin-top:4px">${esc(mp.speed||'')}</p></div>
+       <div><div class="lbl">SPEED</div><p style="font-size:11px;color:var(--t1);margin-top:4px">${esc(mp.speed || '')}</p></div>
      </div>`
-  )).join('')
+      )).join('')
 
-  return `<div class="anim">
+      return `<div class="anim">
     ${gateBox}
     <div class="ib green" style="margin-bottom:16px">
-      <div class="lbl">✓ GATE CLEARED — Motion prompts generated from start frame analysis</div>
+      <div class="lbl">✓ GATE CLEARED — Motion prompts generated from visual analysis</div>
     </div>
     <div class="st">🎥 Motion Prompts (${prompts.length})</div>${cards}
   </div>`
-}
+    }
 
-function unlockMotion() {
-  state.startFrameNotes = document.getElementById('sfNotes')?.value || ''
-  generateStage(6)
-}
+    function unlockMotion() {
+      state.startFrameNotes = document.getElementById('sfNotes')?.value || ''
+      generateStage(6)
+    }
 
-function renderStage7() {
-  const n = state.data.narration
-  if (!n) return ''
-  const opts = ['No narration — pure silent film','Minimal — 1-2 lines only','Full voice-over throughout']
-  const optIdx = n.recommendation === 'none' ? 0 : n.recommendation === 'minimal' ? 1 : 2
-  const optCards = opts.map((opt,i) => `<div class="card" style="${i===optIdx?'border-color:var(--gold);background:rgba(232,184,75,.04)':''}">
-    <div style="font-size:20px;margin-bottom:7px">${i===0?'🤫':i===1?'✨':'🗣️'}</div>
-    <p style="font-size:12px;color:var(--t1)">${opt}</p>
-    ${i===optIdx?'<div style="font-family:var(--mono);font-size:9px;color:var(--gold);margin-top:6px">★ RECOMMENDED</div>':''}
-  </div>`).join('')
-  const lines = (n.lines||[]).map(line => `<div class="card" style="margin-bottom:9px">
+    function renderStage7() {
+      const n = state.data.narration
+      if (!n) return ''
+
+      // Set default choice from recommendation if not set
+      if (state.narrationChoice === null && n.recommendation) {
+        state.narrationChoice = n.recommendation
+      }
+
+      const opts = ['No narration — pure silent film', 'Minimal — 1-2 lines only', 'Full voice-over throughout']
+      const optKeys = ['none', 'minimal', 'full']
+      const optIdx = optKeys.indexOf(state.narrationChoice)
+      const recIdx = optKeys.indexOf(n.recommendation)
+
+      const optCards = opts.map((opt, i) => `
+        <div class="card" 
+             style="cursor:pointer; ${i === optIdx ? 'border-color:var(--gold);background:rgba(232,184,75,0.08)' : ''}" 
+             onclick="selectNarration('${optKeys[i]}')">
+          <div style="font-size:20px;margin-bottom:7px">${i === 0 ? '🤫' : i === 1 ? '✨' : '🗣️'}</div>
+          <p style="font-size:12px;color:var(--t1)">${opt}</p>
+          ${i === recIdx ? '<div style="font-family:var(--mono);font-size:9px;color:var(--gold);margin-top:6px">★ AI RECOMMENDATION</div>' : ''}
+          ${i === optIdx ? '<div style="font-family:var(--mono);font-size:9px;color:var(--green);margin-top:2px">✓ SELECTED</div>' : ''}
+        </div>`).join('')
+
+      const silentInfo = `
+        <div class="ib gold anim">
+          <div class="lbl">📽️ SILENT FILM MODE</div>
+          <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.6">
+            Anda telah memilih untuk tidak menggunakan narasi. Cerita akan disampaikan sepenuhnya melalui visual dan musik. 
+            Lanjutkan ke <strong>Stage 9: Music</strong> untuk mengatur atmosfir auditif.
+          </p>
+        </div>
+      `
+
+      const lines = (n.lines || []).map(line => `<div class="card" style="margin-bottom:9px">
     <div style="display:flex;align-items:center;gap:11px;margin-bottom:9px">
       <span style="font-family:var(--mono);font-size:10px;color:var(--gold);background:rgba(232,184,75,.1);border:1px solid rgba(232,184,75,.2);padding:3px 8px;border-radius:4px">${esc(line.timestamp)}</span>
       <span style="font-family:var(--mono);font-size:9px;color:var(--t3)">Fade in: ${line.fadeIn}s</span>
@@ -741,89 +1987,100 @@ function renderStage7() {
     <p style="font-size:14px;color:var(--t1);font-style:italic;line-height:1.6">"${esc(line.text)}"</p>
     <button class="copy-btn" style="position:static;margin-top:9px" onclick="navigator.clipboard.writeText(${JSON.stringify(line.text)});this.textContent='✓ COPIED';this.classList.add('ok');setTimeout(()=>{this.textContent='COPY LINE';this.classList.remove('ok')},2000)">COPY LINE</button>
   </div>`).join('')
-  return `<div class="anim">
-    <div class="st">🗣️ Narration Assessment</div>
-    <div class="g3" style="margin-bottom:18px">${optCards}</div>
-    <div class="card" style="margin-bottom:18px"><div class="lbl" style="margin-bottom:7px">REASONING</div>
-      <p style="font-size:12px;color:var(--t1);line-height:1.75">${esc(n.reasoning||'')}</p></div>
-    <div class="st">🎤 ElevenLabs — Style Instructions</div>
-    <p style="font-family:var(--mono);font-size:9px;color:var(--t3);margin-bottom:9px">Paste into the "Style Instructions" field in ElevenLabs — NOT the text field.</p>
-    ${copyBlock(n.elevenlabsStyle||'', 'COPY STYLE INSTRUCTIONS')}
-    ${lines.length ? `<div class="st">📝 Narration Lines</div>${lines}` : ''}
-  </div>`
-}
 
-function renderStage8() {
-  const m = state.data.music
-  if (!m) return ''
-  const arcItems = Object.entries(m.emotionalArc||{})
-  const arcColors = ['#74b9ff','#a29bfe','#ff5e5e','#fdcb6e','#00c896']
-  const arcCards = arcItems.map(([k,v],i)=>`<div class="card">
-    <div style="height:3px;background:${arcColors[i]||'var(--accent)'};border-radius:2px;margin-bottom:9px"></div>
+      const voiceContent = `
+        <div class="card" style="margin-bottom:18px"><div class="lbl" style="margin-bottom:7px">REASONING</div>
+          <p style="font-size:12px;color:var(--t1);line-height:1.75">${esc(n.reasoning || '')}</p></div>
+        <div class="st">🎤 ElevenLabs — Style Instructions</div>
+        <p style="font-family:var(--mono);font-size:9px;color:var(--t3);margin-bottom:9px">Paste into the "Style Instructions" field in ElevenLabs — NOT the text field.</p>
+        ${copyBlock(n.elevenlabsStyle || '', 'COPY STYLE INSTRUCTIONS')}
+        ${lines.length ? `<div class="st">📝 Narration Lines</div>${lines}` : ''}
+      `
+
+      return `<div class="anim">
+        <div class="st">🗣️ Narration Selection</div>
+        <div class="g3" style="margin-bottom:18px">${optCards}</div>
+        ${state.narrationChoice === 'none' ? silentInfo : voiceContent}
+        ${actBtns(7)}
+      </div>`
+    }
+
+    function selectNarration(choice) {
+      state.narrationChoice = choice
+      render()
+    }
+
+    function renderStage8() {
+      const m = state.data.music
+      if (!m) return ''
+      const arcItems = Object.entries(m.emotionalArc || {})
+      const arcColors = ['#74b9ff', '#a29bfe', '#ff5e5e', '#fdcb6e', '#00c896']
+      const arcCards = arcItems.map(([k, v], i) => `<div class="card">
+    <div style="height:3px;background:${arcColors[i] || 'var(--accent)'};border-radius:2px;margin-bottom:9px"></div>
     <div class="lbl" style="margin-bottom:5px">${k.toUpperCase()}</div>
-    <p style="font-size:11px;color:var(--t2);line-height:1.6">${esc(v||'')}</p>
+    <p style="font-size:11px;color:var(--t2);line-height:1.6">${esc(v || '')}</p>
   </div>`).join('')
-  const timelineRows = (m.timeline||[]).map(t=>`<div class="tl-row">
+      const timelineRows = (m.timeline || []).map(t => `<div class="tl-row">
     <span class="tl-t">${esc(t.ts)}</span>
-    <div class="tl-bar"><div class="tl-fill" style="width:${t.vol||0}%"></div></div>
-    <span class="tl-v">${t.vol||0}%</span>
-    <span class="tl-e">${esc(t.event||'')}</span>
+    <div class="tl-bar"><div class="tl-fill" style="width:${t.vol || 0}%"></div></div>
+    <span class="tl-v">${t.vol || 0}%</span>
+    <span class="tl-e">${esc(t.event || '')}</span>
   </div>`).join('')
-  const sfxRows = (m.sfx||[]).map(s=>`<tr><td class="td-g">${esc(s.shot||'')}</td><td>${esc(s.sfx||'')}</td><td style="text-align:right;color:var(--t2)">${s.vol||0}%</td></tr>`).join('')
-  return `<div class="anim">
+      const sfxRows = (m.sfx || []).map(s => `<tr><td class="td-g">${esc(s.shot || '')}</td><td>${esc(s.sfx || '')}</td><td style="text-align:right;color:var(--t2)">${s.vol || 0}%</td></tr>`).join('')
+      return `<div class="anim">
     <div class="st">🎵 Emotional Arc</div>
     <div style="display:grid;grid-template-columns:repeat(${arcItems.length},1fr);gap:9px;margin-bottom:22px">${arcCards}</div>
-    <div class="st">🎹 Suno — Song Description</div>${copyBlock(m.sunoDescription||'', 'COPY SUNO PROMPT')}
+    <div class="st">🎹 Suno — Song Description</div>${copyBlock(m.sunoDescription || '', 'COPY SUNO PROMPT')}
     <div class="g2" style="margin-top:18px;margin-bottom:18px">
-      <div class="card"><div class="lbl" style="margin-bottom:9px">INSPIRATION TAGS</div>${(m.inspirationTags||[]).map(t=>`<span class="tag tag-a">${esc(t)}</span>`).join('')}</div>
-      <div class="card"><div class="lbl" style="margin-bottom:9px">NEGATIVE TAGS</div>${(m.negativeTags||[]).map(t=>`<span class="tag tag-r">${esc(t)}</span>`).join('')}</div>
+      <div class="card"><div class="lbl" style="margin-bottom:9px">INSPIRATION TAGS</div>${(m.inspirationTags || []).map(t => `<span class="tag tag-a">${esc(t)}</span>`).join('')}</div>
+      <div class="card"><div class="lbl" style="margin-bottom:9px">NEGATIVE TAGS</div>${(m.negativeTags || []).map(t => `<span class="tag tag-r">${esc(t)}</span>`).join('')}</div>
     </div>
     <div class="st">⏱️ Music Timeline</div>${timelineRows}
     <div class="st">🔊 SFX Notes Per Shot</div>
     <table class="dt"><thead><tr><th>Shot</th><th>SFX</th><th style="text-align:right">Vol</th></tr></thead><tbody>${sfxRows}</tbody></table>
   </div>`
-}
+    }
 
-function renderStage9() {
-  const a = state.data.assembly
-  if (!a) return ''
-  const shots = a.shots||[]
-  const total = shots.reduce((t,s)=>t+(s.duration||0),0)
-  const tableRows = shots.map(s=>`<tr ${s.dissolve?'class="dissolve"':''}>
-    <td class="td-g">${esc(s.shot||'')}</td><td>${esc(s.inTime||'')}</td><td>${esc(s.outTime||'')}</td>
-    <td style="text-align:right">${s.duration||0}s</td><td class="td-m">${esc(s.notes||'')}</td>
+    function renderStage9() {
+      const a = state.data.assembly
+      if (!a) return ''
+      const shots = a.shots || []
+      const total = shots.reduce((t, s) => t + (s.duration || 0), 0)
+      const tableRows = shots.map(s => `<tr ${s.dissolve ? 'class="dissolve"' : ''}>
+    <td class="td-g">${esc(s.shot || '')}</td><td>${esc(s.inTime || '')}</td><td>${esc(s.outTime || '')}</td>
+    <td style="text-align:right">${s.duration || 0}s</td><td class="td-m">${esc(s.notes || '')}</td>
   </tr>`).join('')
-  return `<div class="anim">
-    <div class="st">📁 Folder Structure</div>${copyBlock(a.folderStructure||'')}
-    <div class="st">🎚️ Track Layout</div>${copyBlock(a.trackLayout||'')}
+      return `<div class="anim">
+    <div class="st">📁 Folder Structure</div>${copyBlock(a.folderStructure || '')}
+    <div class="st">🎚️ Track Layout</div>${copyBlock(a.trackLayout || '')}
     <div class="st">📐 Shot Placement</div>
     <table class="dt">
       <thead><tr><th>Shot</th><th>In</th><th>Out</th><th style="text-align:right">Dur</th><th>Notes</th></tr></thead>
       <tbody>${tableRows}</tbody>
       <tfoot><tr><td colspan="3">TOTAL</td><td style="text-align:right">${total}s</td><td class="td-m">+ fade to black</td></tr></tfoot>
     </table>
-    <div class="st">✂️ Transition Rules</div>${copyBlock(a.transitions||'')}
+    <div class="st">✂️ Transition Rules</div>${copyBlock(a.transitions || '')}
     <div class="st">🎨 Color Grade</div>
     <div class="g2" style="margin-bottom:18px">
       <div class="card"><div class="lbl" style="margin-bottom:10px">GLOBAL (All Shots)</div>
-        ${Object.entries(a.colorGrade?.global||{}).map(([k,v])=>`<div class="fr"><span class="frl">${k.charAt(0).toUpperCase()+k.slice(1)}</span><span class="frv">${esc(v)}</span></div>`).join('')}
+        ${Object.entries(a.colorGrade?.global || {}).map(([k, v]) => `<div class="fr"><span class="frl">${k.charAt(0).toUpperCase() + k.slice(1)}</span><span class="frv">${esc(v)}</span></div>`).join('')}
       </div>
       <div class="card" style="border-color:var(--gold)"><div class="lbl" style="margin-bottom:10px">EXCEPTIONS (Warm Shift)</div>
-        ${(a.colorGrade?.exceptions||[]).map(e=>`<div style="margin-bottom:10px"><div style="font-family:var(--mono);font-size:10px;color:var(--gold);font-weight:700;margin-bottom:3px">${esc(e.shots||'')}</div><p style="font-size:11px;color:var(--t1);line-height:1.6">${esc(e.adj||'')}</p></div>`).join('')}
+        ${(a.colorGrade?.exceptions || []).map(e => `<div style="margin-bottom:10px"><div style="font-family:var(--mono);font-size:10px;color:var(--gold);font-weight:700;margin-bottom:3px">${esc(e.shots || '')}</div><p style="font-size:11px;color:var(--t1);line-height:1.6">${esc(e.adj || '')}</p></div>`).join('')}
       </div>
     </div>
     <div class="st">📤 Export Settings</div>
-    <div class="card">${Object.entries(a.export||{}).map(([k,v])=>`<div class="fr"><span class="frl">${k.charAt(0).toUpperCase()+k.slice(1).replace(/([A-Z])/g,' $1')}</span><span class="frv">${esc(v)}</span></div>`).join('')}</div>
+    <div class="card">${Object.entries(a.export || {}).map(([k, v]) => `<div class="fr"><span class="frl">${k.charAt(0).toUpperCase() + k.slice(1).replace(/([A-Z])/g, ' $1')}</span><span class="frv">${esc(v)}</span></div>`).join('')}</div>
   </div>`
-}
+    }
 
-function renderCompletion() {
-  return `<div class="done-screen anim">
+    function renderCompletion() {
+      return `<div class="done-screen anim">
     <div class="done-ico">🎬</div>
     <h2 class="done-title">Pipeline Complete</h2>
-    <p class="done-sub">"${esc(state.data.brief?.title||'')}"</p>
+    <p class="done-sub">"${esc(state.data.brief?.title || '')}"</p>
     <p class="done-desc">All 10 stages approved. Your production package is ready for asset generation and final assembly.</p>
-    <div class="done-grid">${NAMES.map((name,i)=>`<div class="done-stage"><div style="font-size:16px">✅</div><div class="done-stage-name">${name}</div></div>`).join('')}</div>
+    <div class="done-grid">${NAMES.map((name, i) => `<div class="done-stage"><div style="font-size:16px">✅</div><div class="done-stage-name">${name}</div></div>`).join('')}</div>
     <div class="next-box">
       <div class="next-title">NEXT STEPS</div>
       <div class="next-item">1. Generate character reference images using Element Registry (Stage 4)</div>
@@ -834,73 +2091,74 @@ function renderCompletion() {
       <div class="next-item">6. Assemble in editor using Assembly Guide (Stage 10)</div>
     </div>
   </div>`
-}
+    }
 
-// ============================================================
-// RENDER
-// ============================================================
-const RENDERERS = [renderStage0, renderStage1, renderStage2, renderStage3, renderStage4, renderStage5, renderStage6, renderStage7, renderStage8, renderStage9]
+    // ============================================================
+    // RENDER
+    // ============================================================
+    const RENDERERS = [renderStage0, renderStage1, renderStage2, renderStage3, renderStage4, renderStage5, renderStage6, renderStage7, renderStage8, renderStage9]
 
-function renderContent() {
-  const el = document.getElementById('inner')
-  if (getCompleted() === 10) { el.innerHTML = renderCompletion(); return }
+    function renderContent() {
+      const el = document.getElementById('inner')
+      if (getCompleted() === 10) { el.innerHTML = renderCompletion(); return }
 
-  const idx = state.active
-  const s = state.stages[idx]
+      const idx = state.active
+      const s = state.stages[idx]
 
-  if (s.generating) {
-    el.innerHTML = `<div class="gen anim">
+      if (s.generating) {
+        el.innerHTML = `<div class="gen anim">
       <div class="gen-ico"><div class="gen-ring"></div>${ICONS[idx]}</div>
-      <div class="gen-title">Generating Stage ${idx+1}</div>
+      <div class="gen-title">Generating Stage ${idx + 1}</div>
       <div class="gen-stage">${NAMES[idx]}</div>
       <div class="gen-msg">${MSGS[idx]}</div>
       <div class="gen-bar"><div class="gen-prog"></div></div>
     </div>`
-    return
-  }
+        return
+      }
 
-  const header = `<div class="sh">
+      const header = `<div class="sh">
     <div class="sh-tags">
-      <span class="sh-badge sh-num">STAGE ${idx+1} of 10</span>
+      <span class="sh-badge sh-num">STAGE ${idx + 1} of 10</span>
       ${s.approved ? '<span class="sh-badge sh-ok">APPROVED</span>' : ''}
-      ${idx===6&&!s.generated&&state.stages[5].approved ? '<span class="sh-badge sh-blocked">⚠️ HARD GATE</span>' : ''}
+      ${idx === 6 && !s.generated && state.stages[5].approved ? '<span class="sh-badge sh-blocked">⚠️ HARD GATE</span>' : ''}
     </div>
     <h2 class="sh-title">${ICONS[idx]} ${NAMES[idx]}</h2>
     <p class="sh-desc">${DESCS[idx]}</p>
   </div>`
 
-  const errHtml = s.error ? `<div class="err">❌ Error: ${esc(s.error)}<br><br><button class="btn-regen" style="margin-top:8px" onclick="regen(${idx})">🔄 Retry</button></div>` : ''
+      const errHtml = s.error ? `<div class="err">❌ Error: ${esc(s.error)}<br><br><button class="btn-regen" style="margin-top:8px" onclick="regen(${idx})">🔄 Retry</button></div>` : ''
 
-  // Stage 0 — show input form even before generated
-  if (idx === 0 && !s.generated && !s.generating) {
-    el.innerHTML = header + errHtml + renderStage0()
-    return
-  }
+      // Stage 0 — show input form even before generated
+      if (idx === 0 && !s.generated && !s.generating) {
+        el.innerHTML = header + errHtml + renderStage0()
+        return
+      }
 
-  // Stage 6 gate — show gate UI even before generated
-  if (idx === 6 && !s.generated && !s.generating && state.stages[5].approved) {
-    el.innerHTML = header + errHtml + renderStage6()
-    return
-  }
+      // Stage 6 gate — show gate UI even before generated
+      if (idx === 6 && !s.generated && !s.generating && state.stages[5].approved) {
+        el.innerHTML = header + errHtml + renderStage6()
+        return
+      }
 
-  if (!s.generated) {
-    el.innerHTML = header + errHtml + `<div style="display:flex;align-items:center;justify-content:center;height:280px;color:var(--t3);font-family:var(--mono);font-size:11px">Waiting for pipeline...</div>`
-    return
-  }
+      if (!s.generated) {
+        el.innerHTML = header + errHtml + `<div style="display:flex;align-items:center;justify-content:center;height:280px;color:var(--t3);font-family:var(--mono);font-size:11px">Waiting for pipeline...</div>`
+        return
+      }
 
-  el.innerHTML = header + errHtml + RENDERERS[idx]() + actBtns(idx)
-}
+      el.innerHTML = header + errHtml + RENDERERS[idx]() + actBtns(idx)
+    }
 
-function render() {
-  renderSidebar()
-  renderTopbar()
-  renderContent()
-}
+    function render() {
+      renderSidebar()
+      renderTopbar()
+      renderContent()
+    }
 
-// ============================================================
-// INIT
-// ============================================================
-render()
-</script>
+    // ============================================================
+    // INIT
+    // ============================================================
+    render()
+  </script>
 </body>
+
 </html>

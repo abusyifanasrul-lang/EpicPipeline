@@ -314,7 +314,12 @@ Return JSON:
       return `Write motion prompts for these shots. The user has uploaded and reviewed their generated start frames.
 
 Shots: ${JSON.stringify(ctx.shots, null, 2)}
-Start frame notes (what was actually visible in each generated image):
+Start frames uploaded: ${ctx.images?.length || 0} of ${ctx.shots?.length || 0}
+
+Per-shot visual observations (from uploaded images):
+${ctx.images?.map(img => `${img.shotId}: [image attached]`).join('\n') || 'No images uploaded'}
+
+Start frame notes (user descriptions of discrepancies):
 ${ctx.startFrameNotes || 'All start frames matched intent — no discrepancies flagged.'}
 
 CRITICAL RULES:
