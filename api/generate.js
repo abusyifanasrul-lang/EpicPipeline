@@ -53,7 +53,7 @@ export default async function handler(req, res) {
   }
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
-  const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']
+  const modelsToTry = ['gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash']
 
   let lastError
   let success = false
@@ -84,40 +84,27 @@ export default async function handler(req, res) {
 
         try {
           parsed = JSON.parse(text)
-        } catch (e) {
-          // Repair logic
-          let repaired = text.trim()
-          repaired = repaired.split('\n').map((line, i, arr) => {
-            const trimmed = line.trim()
-            if (i < arr.length - 1 && !trimmed.endsWith(',') && !trimmed.endsWith('{') && !trimmed.endsWith('[') && !trimmed.endsWith('}') && !trimmed.endsWith(']')) {
-              return line + '\\n'
-            }
-            return line
-          }).join('')
-
-          const quoteCount = (repaired.replace(/\\"/g, '').match(/"/g) || []).length
-          if (quoteCount % 2 !== 0) repaired += '"'
-
-          const openBraces = (repaired.match(/\{/g) || []).length
-          const closeBraces = (repaired.match(/\}/g) || []).length
-          const openBrackets = (repaired.match(/\[/g) || []).length
-          const closeBrackets = (repaired.match(/\]/g) || []).length
-
-          if (openBrackets > closeBrackets) repaired += ' ]'.repeat(openBrackets - closeBrackets)
-          if (openBraces > closeBraces) repaired += ' }'.repeat(openBraces - closeBraces)
-
-          parsed = JSON.parse(repaired)
+        } catch {
+          // Coba ekstrak JSON dengan regex
+          const match = text.match(/\{[\s\S]*\}/)
+          if (match) parsed = JSON.parse(match[0])
+          else throw new Error('Response bukan JSON valid')
         }
 
         success = true
         break
       } catch (err) {
         lastError = err
-        const isQuota = err.message.includes('429') || err.message.includes('quota')
-        const isOverload = err.message.includes('503') || err.message.includes('demand')
+        const isQuota = err.message.includes('429') || err.message.includes('quota') || err.message.includes('RESOURCE_EXHAUSTED')
+        const isOverload = err.message.includes('503') || err.message.includes('overloaded')
+        const isNotFound = err.message.includes('404') || err.message.includes('not found')
 
         console.error(`Model ${modelName} Attempt ${attempt} failed:`, err.message)
 
+        if (isNotFound) {
+          console.warn(`Model ${modelName} not found, skipping to next model.`)
+          break // model tidak valid — langsung skip ke model berikutnya
+        }
         if (attempt < 2 && (isOverload || isQuota)) {
           await sleep(2000 * attempt)
           continue
