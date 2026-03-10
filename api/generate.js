@@ -52,35 +52,75 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: `Unknown stage: ${stage}` })
   }
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.85,
-        maxOutputTokens: 8192,
-      },
-      systemInstruction: SYSTEM_PROMPT,
-    })
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
-
-    let parsed
+  let lastError
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      parsed = JSON.parse(text)
-    } catch {
-      // Strip markdown fences if present
-      const clean = text.replace(/```json|```/g, '').trim()
-      parsed = JSON.parse(clean)
-    }
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-2.0-flash', // Switching to 2.0-flash for better stability during 2.5 peak demand
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.85,
+          maxOutputTokens: 8192,
+        },
+        systemInstruction: SYSTEM_PROMPT,
+      })
 
-    return res.status(200).json({ ok: true, data: parsed })
-  } catch (err) {
-    console.error('Gemini error:', err)
-    return res.status(500).json({ error: err.message || 'Generation failed' })
+      const result = await model.generateContent(prompt)
+      let text = result.response.text()
+
+      // Robust JSON extraction
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        text = jsonMatch[0]
+      }
+
+      let parsed
+      try {
+        parsed = JSON.parse(text)
+      } catch (e) {
+        // Basic repair for truncated JSON (unterminated strings or missing closing braces)
+        try {
+          let repaired = text.trim()
+
+          // Fix unterminated string if it ends with a quote that isn't closed
+          if ((repaired.match(/"/g) || []).length % 2 !== 0) {
+            repaired += '"'
+          }
+
+          // Close missing arrays/objects
+          const openBraces = (repaired.match(/\{/g) || []).length
+          const closeBraces = (repaired.match(/\}/g) || []).length
+          const openBrackets = (repaired.match(/\[/g) || []).length
+          const closeBrackets = (repaired.match(/\]/g) || []).length
+
+          repaired += ' ]'.repeat(Math.max(0, openBrackets - closeBrackets))
+          repaired += ' }'.repeat(Math.max(0, openBraces - closeBraces))
+
+          parsed = JSON.parse(repaired)
+        } catch (err2) {
+          console.error('Final JSON parse failed:', err2.message)
+          throw new Error('API outputted invalid JSON structure. Please try regenerating.')
+        }
+      }
+
+      return res.status(200).json({ ok: true, data: parsed })
+    } catch (err) {
+      lastError = err
+      console.error(`Attempt ${attempt} failed:`, err.message)
+      if (attempt < 3 && (err.message.includes('503') || err.message.includes('demand'))) {
+        const delay = Math.pow(2, attempt) * 1000
+        console.log(`Retrying in ${delay}ms...`)
+        await sleep(delay)
+        continue
+      }
+      break
+    }
   }
+
+  return res.status(500).json({ error: lastError?.message || 'Generation failed after 3 attempts' })
 }
 
 // ============================================================
@@ -280,7 +320,7 @@ CRITICAL RULES:
 - NEVER reference other shots
 - NEVER use conditional language
 
-Return JSON:
+Return VALID JSON only. Use double quotes and escape any internal quotes:
 {
   "motionPrompts": [
     {
@@ -326,7 +366,7 @@ Return JSON:
       return `Design the music and sound for this film.
 
 Story: ${JSON.stringify(ctx.story, null, 2)}
-Shots: ${JSON.stringify(ctx.shots.map(s => ({id:s.id, duration:s.duration, motion:s.motion})), null, 2)}
+Shots: ${JSON.stringify(ctx.shots.map(s => ({ id: s.id, duration: s.duration, motion: s.motion })), null, 2)}
 
 Return JSON:
 {
@@ -353,7 +393,7 @@ Return JSON:
       return `Create the complete assembly guide for this film.
 
 Title: ${ctx.brief.title}
-Shots: ${JSON.stringify(ctx.shots.map(s => ({id:s.id, duration:s.duration})), null, 2)}
+Shots: ${JSON.stringify(ctx.shots.map(s => ({ id: s.id, duration: s.duration })), null, 2)}
 Narration lines: ${JSON.stringify(ctx.narration?.lines || [], null, 2)}
 
 Rules:
