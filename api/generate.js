@@ -68,7 +68,7 @@ export default async function handler(req, res) {
 
   // Vision models only for multimodal, full fallback chain for text
   const activeModels = isMultimodal
-    ? ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash']
+    ? ['gemini-2.0-flash']
     : ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash']
 
   let lastError
