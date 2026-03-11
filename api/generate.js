@@ -74,11 +74,13 @@ export default async function handler(req, res) {
   let parsed
   const diagnostics = [] // Track what happened per key
 
-  // Try each API key
+  // Strategy: for each key, try ALL models. Only skip to next key when all models fail.
+  // Gemini free tier quota is per-model, not per-key.
   for (const apiKey of apiKeys) {
     if (success) break
     const keyIdx = apiKeys.indexOf(apiKey) + 1
     const keyPreview = apiKey.slice(0, 8) + '...' + apiKey.slice(-4)
+    let allModelsQuota = true // track if ALL models hit quota for this key
 
     for (const modelName of activeModels) {
       if (success) break
@@ -131,14 +133,14 @@ export default async function handler(req, res) {
           try {
             parsed = JSON.parse(text)
           } catch {
-            // Coba ekstrak JSON dengan regex
             const match = text.match(/\{[\s\S]*\}/)
             if (match) parsed = JSON.parse(match[0])
             else throw new Error('Response bukan JSON valid')
           }
 
           success = true
-          diagnostics.push(`Key${keyIdx}(${keyPreview}) + ${modelName}: ✅ OK`)
+          allModelsQuota = false
+          diagnostics.push(`Key${keyIdx}(${keyPreview}) + ${modelName}: ✅`)
           break
         } catch (err) {
           lastError = err
@@ -146,17 +148,19 @@ export default async function handler(req, res) {
           const isOverload = err.message.includes('503') || err.message.includes('overloaded')
           const isNotFound = err.message.includes('404') || err.message.includes('not found')
 
-          const shortErr = err.message.slice(0, 120)
-          diagnostics.push(`Key${keyIdx}(${keyPreview}) + ${modelName} #${attempt}: ❌ ${shortErr}`)
-          console.error(`Key ${keyIdx}/${apiKeys.length} Model ${modelName} Attempt ${attempt} failed:`, err.message)
+          const shortErr = err.message.slice(0, 100)
+          diagnostics.push(`Key${keyIdx} + ${modelName}: ❌ ${isQuota ? '429' : isNotFound ? '404' : isOverload ? '503' : shortErr}`)
 
           if (isNotFound) {
-            break
+            allModelsQuota = false
+            break // skip this model, try next model
           }
 
           if (isQuota) {
-            break
+            break // skip retries for this model, but continue to NEXT MODEL (same key)
           }
+
+          if (!isQuota) allModelsQuota = false
 
           if (attempt < 2 && isOverload) {
             await sleep(2000 * attempt)
@@ -165,12 +169,9 @@ export default async function handler(req, res) {
           break
         }
       }
-
-      // If quota error, break out of model loop to try next key
-      if (lastError && (lastError.message.includes('429') || lastError.message.includes('quota') || lastError.message.includes('RESOURCE_EXHAUSTED'))) {
-        break
-      }
+      // After attempt loop: continue to next model (no break here!)
     }
+    // After model loop: if all models hit quota for this key, try next key
   }
 
   if (success) {
