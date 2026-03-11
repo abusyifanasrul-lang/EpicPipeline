@@ -1581,13 +1581,32 @@
               state.stages[5].batchProgress = `Generating batch ${b + 1} of ${totalBatches}...` 
               render()
 
-              const batchResult = await callAPI('image_batch', {
-                batchShots,
-                elements: d.elements,
-                batchStateRegistry,
-                styleAnchor: d.styleAnchor,
-                revisionNote: state.regenNote || null
-              })
+              let batchResult = null
+              let batchAttempt = 0
+              const MAX_BATCH_ATTEMPTS = 3
+              while (!batchResult && batchAttempt < MAX_BATCH_ATTEMPTS) {
+                try {
+                  batchResult = await callAPI('image_batch', {
+                    batchShots,
+                    elements: d.elements,
+                    batchStateRegistry,
+                    styleAnchor: d.styleAnchor,
+                    revisionNote: state.regenNote || null
+                  })
+                } catch (batchErr) {
+                  batchAttempt++
+                  const is429 = batchErr.message.includes('429') || batchErr.message.includes('Batas API')
+                  const isTimeout = batchErr.message.includes('Timeout') || batchErr.message.includes('504')
+                  if ((is429 || isTimeout) && batchAttempt < MAX_BATCH_ATTEMPTS) {
+                    const waitSec = is429 ? 60 : 10
+                    state.stages[5].batchProgress = `Batch ${b + 1}: quota hit, waiting ${waitSec}s before retry (attempt ${batchAttempt}/${MAX_BATCH_ATTEMPTS})...` 
+                    render()
+                    await new Promise(resolve => setTimeout(resolve, waitSec * 1000))
+                  } else {
+                    throw batchErr // error lain atau sudah max attempts — lempar ke catch luar
+                  }
+                }
+              }
 
               allPrompts.push(...(batchResult.imagePrompts || []))
 
