@@ -72,10 +72,13 @@ export default async function handler(req, res) {
   let lastError
   let success = false
   let parsed
+  const diagnostics = [] // Track what happened per key
 
   // Try each API key
   for (const apiKey of apiKeys) {
     if (success) break
+    const keyIdx = apiKeys.indexOf(apiKey) + 1
+    const keyPreview = apiKey.slice(0, 8) + '...' + apiKey.slice(-4)
 
     for (const modelName of activeModels) {
       if (success) break
@@ -135,6 +138,7 @@ export default async function handler(req, res) {
           }
 
           success = true
+          diagnostics.push(`Key${keyIdx}(${keyPreview}) + ${modelName}: ✅ OK`)
           break
         } catch (err) {
           lastError = err
@@ -142,24 +146,22 @@ export default async function handler(req, res) {
           const isOverload = err.message.includes('503') || err.message.includes('overloaded')
           const isNotFound = err.message.includes('404') || err.message.includes('not found')
 
-          console.error(`Key ${apiKeys.indexOf(apiKey) + 1}/${apiKeys.length} Model ${modelName} Attempt ${attempt} failed:`, err.message)
+          const shortErr = err.message.slice(0, 120)
+          diagnostics.push(`Key${keyIdx}(${keyPreview}) + ${modelName} #${attempt}: ❌ ${shortErr}`)
+          console.error(`Key ${keyIdx}/${apiKeys.length} Model ${modelName} Attempt ${attempt} failed:`, err.message)
 
           if (isNotFound) {
-            console.warn(`Model ${modelName} not found, skipping to next model.`)
-            break // model tidak valid — langsung skip ke model berikutnya
+            break
           }
 
-          // If quota exhausted, skip all models for this key and try next key
           if (isQuota) {
-            console.warn(`Key ${apiKeys.indexOf(apiKey) + 1} quota exhausted, trying next key...`)
-            break // break inner model loop
+            break
           }
 
           if (attempt < 2 && isOverload) {
             await sleep(2000 * attempt)
             continue
           }
-          // If it's a structural error or we're out of attempts for this model, try next model
           break
         }
       }
@@ -177,9 +179,11 @@ export default async function handler(req, res) {
 
   const isQuota = lastError?.message?.includes('429') || lastError?.message?.includes('quota') || lastError?.message?.includes('RESOURCE_EXHAUSTED')
   const status = isQuota ? 429 : 500
+  const diagStr = diagnostics.join(' | ')
+  const rawErr = lastError?.message?.slice(0, 200) || 'unknown'
   const userMessage = isQuota
-    ? `Semua API key (${apiKeys.length}) telah mencapai batas quota harian Gemini Free Tier. Quota reset setiap hari ~2 PM WIB (midnight Pacific). Opsi: (1) Tambahkan API key baru di Vercel → Settings → Environment Variables → GEMINI_API_KEY (pisahkan dengan koma), atau (2) Tunggu hingga quota reset.`
-    : `Generation failed: ${lastError?.message}`
+    ? `Quota habis. Keys: ${apiKeys.length}. Raw: ${rawErr}. Log: ${diagStr}`
+    : `Generation failed: ${rawErr}. Log: ${diagStr}`
 
   return res.status(status).json({ error: userMessage })
 }
