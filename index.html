@@ -1916,6 +1916,7 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
 
     function renderStage2() {
       const r = state.data.refAnalysis
+      if (!r && !state.stages[1].approved) return '<div>Waiting...</div>'
 
       const refUploadSection = state.referenceImage
         ? `<div class="ib green" style="margin-bottom:16px">
@@ -1938,32 +1939,30 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
             <button class="btn-gen" style="padding:8px 18px;font-size:12px" onclick="triggerRefUpload()">📁 Upload Reference Image</button>
           </div>`
 
-      const rows = (obj, keys) => keys.map(([k, label]) => `<div class="fr"><span class="frl">${label}</span><span class="frv">${esc(r[k] || '')}</span></div>`).join('')
-      
       return `<div class="anim">
     ${refUploadSection}
     
     ${!r ? `
     <button class="btn-gen" onclick="generateStage(2)" style="margin-top:4px;width:100%;justify-content:center;padding:12px">
       🎨 ${state.referenceImage ? 'Analyze Reference Image & Generate Style Anchor' : 'Generate Style Anchor (no reference)'}
-    </button>` : ''}
-
-    ${r ? `
-    <div class="g2" style="margin-bottom:14px">
-      <div class="card"><div class="lbl" style="margin-bottom:10px">1. CORE AESTHETIC</div>
-        ${rows(r, [['renderingStyle', 'Rendering Style'], ['materiality', 'Materiality'], ['overallFinish', 'Overall Finish']])}</div>
-      <div class="card"><div class="lbl" style="margin-bottom:10px">2. CHARACTER DESIGN</div>
-        ${rows(r, [['proportions', 'Proportions'], ['eyes', 'Eyes'], ['facialFeatures', 'Facial Features'], ['hair', 'Hair']])}</div>
-      <div class="card"><div class="lbl" style="margin-bottom:10px">3. COLOR & LIGHTING</div>
-        ${rows(r, [['palette', 'Palette'], ['lightingType', 'Lighting Type'], ['shadowQuality', 'Shadow Quality'], ['depthOfField', 'Depth of Field']])}</div>
-      <div class="card"><div class="lbl" style="margin-bottom:10px">4. TEXTURE & MATERIAL</div>
-        ${rows(r, [['skin', 'Skin'], ['fabric', 'Fabric'], ['environment', 'Environment']])}</div>
-    </div>
-    <div class="card" style="margin-bottom:20px"><div class="lbl">5. MOOD</div>
-      <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(r.mood || '')}</p></div>
-    <div class="st">🎯 Style Anchor <span style="font-size:10px;color:var(--t3);font-weight:400;font-family:var(--mono)">— Locked. Appended to every image prompt.</span></div>
-    <div class="anch"><div class="anch-hd">[STYLE ANCHOR]</div>${copyBlock(r.styleAnchor || '')}</div>
-    ` : ''}
+    </button>` : (() => {
+      const rows = (obj, keys) => keys.map(([k, label]) => `<div class="fr"><span class="frl">${label}</span><span class="frv">${esc(r[k] || '')}</span></div>`).join('')
+      return `
+        <div class="g2" style="margin-bottom:14px">
+          <div class="card"><div class="lbl" style="margin-bottom:10px">1. CORE AESTHETIC</div>
+            ${rows(r, [['renderingStyle', 'Rendering Style'], ['materiality', 'Materiality'], ['overallFinish', 'Overall Finish']])}</div>
+          <div class="card"><div class="lbl" style="margin-bottom:10px">2. CHARACTER DESIGN</div>
+            ${rows(r, [['proportions', 'Proportions'], ['eyes', 'Eyes'], ['facialFeatures', 'Facial Features'], ['hair', 'Hair']])}</div>
+          <div class="card"><div class="lbl" style="margin-bottom:10px">3. COLOR & LIGHTING</div>
+            ${rows(r, [['palette', 'Palette'], ['lightingType', 'Lighting Type'], ['shadowQuality', 'Shadow Quality'], ['depthOfField', 'Depth of Field']])}</div>
+          <div class="card"><div class="lbl" style="margin-bottom:10px">4. TEXTURE & MATERIAL</div>
+            ${rows(r, [['skin', 'Skin'], ['fabric', 'Fabric'], ['environment', 'Environment']])}</div>
+        </div>
+        <div class="card" style="margin-bottom:20px"><div class="lbl">5. MOOD</div>
+          <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(r.mood || '')}</p></div>
+        <div class="st">🎯 Style Anchor <span style="font-size:10px;color:var(--t3);font-weight:400;font-family:var(--mono)">— Locked. Appended to every image prompt.</span></div>
+        <div class="anch"><div class="anch-hd">[STYLE ANCHOR]</div>${copyBlock(r.styleAnchor || '')}</div>`
+    })()}
   </div>`
     }
 
