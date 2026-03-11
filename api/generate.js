@@ -66,8 +66,8 @@ export default async function handler(req, res) {
 
   // Vision models only for multimodal, full fallback chain for text
   const activeModels = isMultimodal
-    ? ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash']
-    : ['gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash']
+    ? ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-pro-exp-02-05']
+    : ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-pro-exp-02-05']
 
   let lastError
   let success = false
@@ -182,8 +182,10 @@ export default async function handler(req, res) {
   const status = isQuota ? 429 : 500
   const diagStr = diagnostics.join(' | ')
   const rawErr = lastError?.message?.slice(0, 200) || 'unknown'
+  const isRPM = rawErr.includes('Too Many Requests')
+  
   const userMessage = isQuota
-    ? `Quota habis. Keys: ${apiKeys.length}. Raw: ${rawErr}. Log: ${diagStr}`
+    ? `Batas API tercapai! ⏳ Jika ini limit per menit (15 RPM), tunggu 1 menit lalu coba lagi. Jika ini limit harian, tunggu besok siang. (Keys: ${apiKeys.length} | Error: ${rawErr}) Log: ${diagStr}`
     : `Generation failed: ${rawErr}. Log: ${diagStr}`
 
   return res.status(status).json({ error: userMessage })
