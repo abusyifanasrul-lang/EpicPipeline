@@ -464,6 +464,8 @@ Return JSON:
 
       return `You are analyzing ${hasImages ? ctx.images.length + ' actual start frame images' : 'shot descriptions only'} to write precise motion prompts for a short film.
 
+${ctx.targetShotId ? `IMPORTANT: ONLY generate the motion prompt for one specific shot: ${ctx.targetShotId}. You are given the full shot plan for context, but you must output exactly ONE element in the motionPrompts array corresponding to ${ctx.targetShotId}.` : ''}
+
 ${hasImages ? `I am sending you the actual generated start frame images.
 Analyze each image carefully BEFORE writing its motion prompt.
 For each image observe: exact character positions in frame, what occupies foreground/midground/background, lighting direction, object states, camera angle.

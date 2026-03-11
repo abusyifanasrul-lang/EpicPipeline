@@ -1481,7 +1481,7 @@
       if (!isJson) {
         const text = await res.text()
         const errMsg = text.includes('error occurred') 
-          ? '⏳ API Timeout atau Gambar terlalu besar! (Vercel Limit). Gambar sedang dioptimasi otomatis, coba turunkan resolusi.'
+          ? '⏳ Vercel Execution Timeout (Max 60s) atau Server Error. Coba ulangi request ini lagi bertahap, atau periksa Vercel logs.'
           : 'Unexpected API Error (Bukan JSON): ' + text.slice(0, 100)
         throw new Error(errMsg)
       }
@@ -1559,16 +1559,50 @@
             state.regenNote = null
             d.imagePrompts = result.imagePrompts
             break
-          case 6:
-            result = await callAPI(6, {
-              shots: d.shots,
-              startFrameNotes: state.startFrameNotes,
-              images: state.startFrameImages,
-              revisionNote: state.regenNote || null
-            })
-            state.regenNote = null
-            d.motionPrompts = result.motionPrompts
+          case 6: {
+            if (!Array.isArray(d.motionPrompts) || state.regenNote || d.motionPrompts.length !== d.shots.length) {
+              d.motionPrompts = new Array(d.shots.length).fill(null)
+            }
+            
+            let anyError = null
+            for (let i = 0; i < d.shots.length; i++) {
+              const shotId = d.shots[i].id
+              if (d.motionPrompts[i] && !state.regenNote) continue
+              
+              MSGS[6] = `Analyzing ${shotId} (${i+1}/${d.shots.length})...`
+              render()
+              
+              const img = state.startFrameImages.find(img => img.shotId === shotId)
+              
+              try {
+                const shotResult = await callAPI(6, {
+                  shots: d.shots,
+                  targetShotId: shotId,
+                  startFrameNotes: state.startFrameNotes,
+                  images: img ? [img] : [],
+                  revisionNote: state.regenNote || null
+                })
+                
+                if (shotResult?.motionPrompts?.length > 0) {
+                  const targetPrompt = shotResult.motionPrompts.find(p => p.shotId === shotId) || shotResult.motionPrompts[0]
+                  d.motionPrompts[i] = targetPrompt
+                  saveState() // Save intermediate progress immediately!
+                }
+              } catch (e) {
+                anyError = e
+                break 
+              }
+            }
+            
+            MSGS[6] = 'Calculating motion vectors...' 
+            
+            if (anyError) {
+              throw anyError
+            } else {
+              state.regenNote = null
+            }
             break
+          }
           case 7:
             result = await callAPI(7, {
               story: d.story,
@@ -2179,9 +2213,9 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
     <div class="gate-rule">Why this exists: AI generators often deviate from exact prompt instructions. By uploading the actual results, we ensure the motion logic (Stage 7) continues exactly from where the image left off, preventing "ghosting" or sudden shifts.</div>
   </div>`
 
-      if (!prompts) return `<div class="anim">${gateBox}</div>`
+      if (!prompts || prompts.filter(Boolean).length === 0) return `<div class="anim">${gateBox}</div>`
 
-      const cards = prompts.map((mp, i) => xp('mp' + i, `${mp.shotId} — Motion`, `${mp.duration}s`,
+      const cards = prompts.filter(Boolean).map((mp, i) => xp('mp' + i, `${mp.shotId} — Motion`, `${mp.duration}s`,
         `${mp.visualObservation ? `<div style="margin-bottom:12px">
        <div class="lbl" style="margin-bottom:4px">👁️ VISUAL OBSERVATION (dari start frame)</div>
        <p style="font-family:var(--mono);font-size:10px;color:var(--accent2);line-height:1.7;background:var(--bg2);padding:10px;border-radius:6px;border:1px solid var(--border)">${esc(mp.visualObservation)}</p>
