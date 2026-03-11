@@ -1,3 +1,7 @@
+export const config = {
+  maxDuration: 60
+}
+
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const SYSTEM_PROMPT = `You are a world-class short film director and story architect.
@@ -183,7 +187,7 @@ Return JSON:
   "emotionalTone": "description of overall feeling",
   "pacing": "Brisk | Moderate | Slow | Dynamic — with explanation",
   "soundDesign": "general direction for music and SFX"
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
 
     // ── STAGE 1: STORY GENERATION ───────────────────────────
     case 1:
@@ -248,7 +252,7 @@ Return JSON:
     "Final frame is a holdable image",
     "Story works simultaneously as a children's film and an adult meditation"
   ]
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
 
     // ── STAGE 2: REFERENCE IMAGE ANALYSIS ───────────────────
     case 2:
@@ -287,7 +291,7 @@ Return JSON:
   "environment": "observed material style",
   "mood": "emotional register this style lives in",
   "styleAnchor": "Render      : [exact render style from image]\nProportions : [exact proportions from image]\nEyes        : [exact eye style from image]\nLighting    : [exact lighting from image]\nTexture     : [exact textures from image]\nPalette     : [exact colors from image]\nMood        : [exact mood from image]\nTechnical   : 1920x1080 | 16:9"
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
       } else {
         return `Based on this story, recommend the ideal visual style for an animated short film with the emotional register of festival-winning shorts.
 
@@ -320,7 +324,7 @@ Return JSON:
   "environment": "material style",
   "mood": "what emotional register this style lives in",
   "styleAnchor": "Render      : ...\nProportions : ...\nEyes        : ...\nLighting    : ...\nTexture     : ...\nPalette     : ...\nMood        : ...\nTechnical   : 1920x1080 | 16:9"
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
       }
 
     // ── STAGE 3: ELEMENT REGISTRY ────────────────────────────
@@ -356,7 +360,7 @@ Return JSON:
       ]
     }
   ]
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
 
     // ── STAGE 4: STORYBOARD ──────────────────────────────────
     case 4:
@@ -385,7 +389,7 @@ Return JSON:
       "audio": "music direction / SFX note"
     }
   ]
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
 
     // ── STAGE 5: IMAGE PROMPTS ───────────────────────────────
     case 5:
@@ -417,7 +421,7 @@ Return JSON:
       "fullPrompt": "complete assembled prompt ready to paste"
     }
   ]
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
 
     // ── STAGE 6: MOTION PROMPTS (multimodal — reads actual start frames) ──
     case 6: {
@@ -463,7 +467,7 @@ Return VALID JSON:
       "speed": "Normal | 80% speed | Slow motion first 1s then normal"
     }
   ]
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
     }
 
     // ── STAGE 7: NARRATION ───────────────────────────────────
@@ -492,7 +496,7 @@ Return JSON:
   "lines": [
     { "timestamp": "00:01", "text": "narration line", "fadeIn": 2 }
   ]
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
 
     // ── STAGE 8: MUSIC ───────────────────────────────────────
     case 8:
@@ -519,7 +523,7 @@ Return JSON:
   "sfx": [
     { "shot": "Shot_01", "sfx": "description", "vol": 70 }
   ]
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
 
     // ── STAGE 9: ASSEMBLY GUIDE ──────────────────────────────
     case 9:
@@ -563,7 +567,7 @@ Return JSON:
     "audio": "AAC 48kHz Stereo",
     "totalDuration": "including fade to black"
   }
-}`
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
 
     default:
       return null
