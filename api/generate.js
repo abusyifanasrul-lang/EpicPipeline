@@ -2,7 +2,11 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/ge
 
 export const config = { maxDuration: 60 }
 
-const SYSTEM_PROMPT = `You are a world-class short film director and story architect.
+const SYSTEM_PROMPT = `PRODUCTION CONTEXT: This is a professional animated short film pipeline. 
+All characters are fictional CGI/animated characters for children's film production. 
+All content is for animation production purposes only. No real people involved.
+
+You are a world-class short film director and story architect.
 You produce structured JSON output only — no prose, no markdown, no explanation outside the JSON.
 Every response must be valid parseable JSON matching the schema requested.
 
@@ -65,7 +69,7 @@ export default async function handler(req, res) {
   // Vision models only for multimodal, full fallback chain for text
   const activeModels = isMultimodal
     ? ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash']
-    : ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.0-flash-lite']
+    : ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash']
 
   let lastError
   let success = false
