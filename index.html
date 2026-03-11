@@ -1575,11 +1575,11 @@
 
       if (idx < 9) {
         state.active = idx + 1
-        // Stages 2-9 auto-generate; stage 6 needs user action first
-        if (idx + 1 !== 6) {
+        // Stages 3-5, 7-9 auto-generate; stage 2 and 6 need manual action
+        if (idx + 1 !== 2 && idx + 1 !== 6) {
           generateStage(idx + 1)
         } else {
-          state.stages[6] = { generated: false, approved: false, generating: false, error: null }
+          state.stages[idx + 1] = { generated: false, approved: false, generating: false, error: null }
           render()
         }
       }
@@ -1938,11 +1938,17 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
             <button class="btn-gen" style="padding:8px 18px;font-size:12px" onclick="triggerRefUpload()">📁 Upload Reference Image</button>
           </div>`
 
-      if (!r) return `<div class="anim">${refUploadSection}</div>`
-
       const rows = (obj, keys) => keys.map(([k, label]) => `<div class="fr"><span class="frl">${label}</span><span class="frv">${esc(r[k] || '')}</span></div>`).join('')
+      
       return `<div class="anim">
     ${refUploadSection}
+    
+    ${!r ? `
+    <button class="btn-gen" onclick="generateStage(2)" style="margin-top:4px;width:100%;justify-content:center;padding:12px">
+      🎨 ${state.referenceImage ? 'Analyze Reference Image & Generate Style Anchor' : 'Generate Style Anchor (no reference)'}
+    </button>` : ''}
+
+    ${r ? `
     <div class="g2" style="margin-bottom:14px">
       <div class="card"><div class="lbl" style="margin-bottom:10px">1. CORE AESTHETIC</div>
         ${rows(r, [['renderingStyle', 'Rendering Style'], ['materiality', 'Materiality'], ['overallFinish', 'Overall Finish']])}</div>
@@ -1957,6 +1963,7 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
       <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(r.mood || '')}</p></div>
     <div class="st">🎯 Style Anchor <span style="font-size:10px;color:var(--t3);font-weight:400;font-family:var(--mono)">— Locked. Appended to every image prompt.</span></div>
     <div class="anch"><div class="anch-hd">[STYLE ANCHOR]</div>${copyBlock(r.styleAnchor || '')}</div>
+    ` : ''}
   </div>`
     }
 
@@ -2313,6 +2320,7 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
     <div class="sh-tags">
       <span class="sh-badge sh-num">STAGE ${idx + 1} of 10</span>
       ${s.approved ? '<span class="sh-badge sh-ok">APPROVED</span>' : ''}
+      ${idx === 2 && !s.generated && state.stages[1].approved ? '<span class="sh-badge sh-blocked">⚠️ HARD GATE</span>' : ''}
       ${idx === 6 && !s.generated && state.stages[5].approved ? '<span class="sh-badge sh-blocked">⚠️ HARD GATE</span>' : ''}
     </div>
     <h2 class="sh-title">${ICONS[idx]} ${NAMES[idx]}</h2>
@@ -2324,6 +2332,12 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
       // Stage 0 — show input form even before generated
       if (idx === 0 && !s.generated && !s.generating) {
         el.innerHTML = header + errHtml + renderStage0()
+        return
+      }
+
+      // Stage 2 gate — show upload UI before generate
+      if (idx === 2 && !s.generated && !s.generating && state.stages[1].approved) {
+        el.innerHTML = header + errHtml + renderStage2()
         return
       }
 
