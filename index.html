@@ -1898,8 +1898,6 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
     ${d.qualityChecks?.length ? `<div class="ib green" style="margin-top:20px"><div class="lbl">✓ QUALITY VERIFICATION</div>
       <div class="ib-checks">${d.qualityChecks.map(c => `<div class="ib-check">${esc(c)}</div>`).join('')}</div>
     </div>` : ''}
-
-    ${actBtns(1)}
   </div>`
     }
 
@@ -2335,7 +2333,7 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
         return
       }
 
-      // Stage 2 gate — show upload UI before generate
+      // Stage 2 gate — show upload UI before generate (also after error)
       if (idx === 2 && !s.generated && !s.generating && state.stages[1].approved) {
         el.innerHTML = header + errHtml + renderStage2()
         return
