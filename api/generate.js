@@ -166,7 +166,8 @@ export default async function handler(req, res) {
 
           if (!isQuota) allModelsQuota = false
 
-          if (attempt < 2 && isOverload) {
+          // Coba ulang untuk error parsing JSON atau error jaringn (selain quota/404)
+          if (attempt < 2) {
             await sleep(2000 * attempt)
             continue
           }
