@@ -427,6 +427,8 @@ Return JSON:
     case 5:
       return `Generate one start frame image prompt per shot.
 
+${ctx.targetShotId ? `IMPORTANT: ONLY generate the image prompt for one specific shot: ${ctx.targetShotId}. You are given the full shot plan for context, but you must output exactly ONE element in the imagePrompts array corresponding to ${ctx.targetShotId}.` : ''}
+
 Shots: ${JSON.stringify(ctx.shots, null, 2)}
 Element Registry: ${JSON.stringify(ctx.elements, null, 2)}
 State Registry: ${JSON.stringify(ctx.stateRegistry, null, 2)}

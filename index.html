@@ -1548,17 +1548,49 @@
             state.regenNote = null
             d.shots = result.shots
             break
-          case 5:
-            result = await callAPI(5, {
-              shots: d.shots,
-              elements: d.elements,
-              stateRegistry: d.stateRegistry,
-              styleAnchor: d.styleAnchor,
-              revisionNote: state.regenNote || null
-            })
-            state.regenNote = null
-            d.imagePrompts = result.imagePrompts
+          case 5: {
+            if (!Array.isArray(d.imagePrompts) || state.regenNote || d.imagePrompts.length !== d.shots.length) {
+              d.imagePrompts = new Array(d.shots.length).fill(null)
+            }
+            
+            let anyError5 = null
+            for (let i = 0; i < d.shots.length; i++) {
+              const shotId = d.shots[i].id
+              if (d.imagePrompts[i] && !state.regenNote) continue
+              
+              MSGS[5] = `Engineering prompt for ${shotId} (${i+1}/${d.shots.length})...`
+              render()
+              
+              try {
+                const shotResult = await callAPI(5, {
+                  shots: d.shots,
+                  targetShotId: shotId,
+                  elements: d.elements,
+                  stateRegistry: d.stateRegistry,
+                  styleAnchor: d.styleAnchor,
+                  revisionNote: state.regenNote || null
+                })
+                
+                if (shotResult?.imagePrompts?.length > 0) {
+                  const targetPrompt = shotResult.imagePrompts.find(p => p.shotId === shotId) || shotResult.imagePrompts[0]
+                  d.imagePrompts[i] = targetPrompt
+                  saveState() // Save intermediate progress immediately!
+                }
+              } catch (e) {
+                anyError5 = e
+                break 
+              }
+            }
+            
+            MSGS[5] = 'Engineering image prompts...' 
+            
+            if (anyError5) {
+              throw anyError5
+            } else {
+              state.regenNote = null
+            }
             break
+          }
           case 6: {
             if (!Array.isArray(d.motionPrompts) || state.regenNote || d.motionPrompts.length !== d.shots.length) {
               d.motionPrompts = new Array(d.shots.length).fill(null)
@@ -2130,7 +2162,7 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
       const prompts = state.data.imagePrompts || []
       const shots = state.data.shots || []
       const anchor = state.data.styleAnchor || ''
-      const cards = prompts.map((p, i) => xp('ip' + i, `${p.shotId} — Image Prompt`, shots[i]?.type || '',
+      const cards = prompts.filter(Boolean).map((p, i) => xp('ip' + i, `${p.shotId} — Image Prompt`, shots.find(s => s.id === p.shotId)?.type || '',
         `<div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">CAMERA</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.camera || '')}</p></div>
      <div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">SCENE</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.scene || '')}</p></div>
      <div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:5px">CHARACTERS</div><p style="font-size:12px;color:var(--t1);line-height:1.7">${esc(p.chars || '')}</p></div>
@@ -2153,7 +2185,7 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
         <div class="ib-check">Atmosphere explicitly stated in every prompt</div>
       </div>
     </div>
-    <div class="st">🖌️ Start Frame Image Prompts (${prompts.length} prompts)</div>${cards}
+    <div class="st">🖌️ Start Frame Image Prompts (${prompts.filter(Boolean).length} prompts)</div>${cards}
   </div>`
     }
 
