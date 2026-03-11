@@ -1419,7 +1419,7 @@
     // ============================================================
     // STATE
     // ============================================================
-    const state = {
+    const DEFAULT_STATE = {
       active: 0,
       stages: Array.from({ length: 10 }, () => ({ generated: false, approved: false, generating: false, error: null })),
       data: {
@@ -1435,6 +1435,36 @@
       referenceImage: null,
       stageNotes: {},
       regenNote: null
+    }
+
+    let state = loadState() || JSON.parse(JSON.stringify(DEFAULT_STATE))
+
+    function loadState() {
+      try {
+        const saved = localStorage.getItem('epicPipeline_state')
+        if (!saved) return null
+        const s = JSON.parse(saved)
+        // Reset generating flag on load in case user refreshed during generation
+        s.stages.forEach(st => st.generating = false)
+        return s
+      } catch (e) {
+        return null
+      }
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem('epicPipeline_state', JSON.stringify(state))
+      } catch (e) {
+        console.warn('Failed to save state to localStorage', e)
+      }
+    }
+
+    function resetPipeline() {
+      if (!confirm('Are you sure you want to reset all progress? This cannot be undone.')) return
+      state = JSON.parse(JSON.stringify(DEFAULT_STATE))
+      saveState()
+      render()
     }
 
     // ============================================================
@@ -1808,7 +1838,7 @@
       ${s.approved ? '<span class="sb-badge sb-badge-done">DONE</span>' : ''}
       ${isGate ? '<span class="sb-badge sb-badge-gate">GATE</span>' : ''}
     </button>`
-      }).join('')
+      }).join('') + `<button class="sb-btn" style="margin-top:24px;color:rgba(255,80,80,0.8);border:1px solid rgba(255,80,80,.2);justify-content:center;background:rgba(255,80,80,.05)" onclick="resetPipeline()">⚠️ Reset Pipeline</button>`
       const c = getCompleted()
       document.getElementById('progLabel').textContent = `${c} / 10`
       document.getElementById('progFill').style.width = `${c * 10}%`
@@ -2389,6 +2419,7 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
     }
 
     function render() {
+      saveState()
       renderSidebar()
       renderTopbar()
       renderContent()
