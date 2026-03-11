@@ -1413,7 +1413,8 @@
       userInput: '',
       startFrameNotes: '',
       startFrameImages: [],
-      narrationChoice: null
+      narrationChoice: null,
+      referenceImage: null
     }
 
     // ============================================================
@@ -1451,7 +1452,7 @@
             d.story = result
             break
           case 2:
-            result = await callAPI(2, { brief: d.brief, story: d.story })
+            result = await callAPI(2, { brief: d.brief, story: d.story, referenceImage: state.referenceImage })
             d.refAnalysis = result
             d.styleAnchor = result.styleAnchor
             break
@@ -1629,6 +1630,33 @@
       inp.click()
     }
 
+    function triggerRefUpload() {
+      const inp = document.createElement('input')
+      inp.type = 'file'
+      inp.accept = 'image/*'
+      inp.onchange = (e) => {
+        const file = e.target.files[0]
+        if (!file) return
+        const reader = new FileReader()
+        reader.onload = (ev) => {
+          const dataUrl = ev.target.result
+          state.referenceImage = {
+            data: dataUrl.split(',')[1],
+            mimeType: file.type || 'image/jpeg',
+            preview: dataUrl
+          }
+          render()
+        }
+        reader.readAsDataURL(file)
+      }
+      inp.click()
+    }
+
+    function clearReferenceImage() {
+      state.referenceImage = null
+      render()
+    }
+
     // ============================================================
     // SIDEBAR + TOPBAR
     // ============================================================
@@ -1723,6 +1751,14 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
       <div class="ea-lbl">⚡ EMOTIONAL ANCHOR</div>
       <div class="ea-txt">${esc(d.emotionalAnchor || '')}</div>
     </div>
+    ${d.subtextLayer ? `<div style="background:rgba(232,184,75,.06);border:1px solid rgba(232,184,75,.2);border-radius:8px;padding:14px 18px;margin-bottom:12px">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:.12em;font-weight:700;margin-bottom:6px">🎭 SUBTEXT LAYER</div>
+      <div style="font-size:13px;color:var(--t1);line-height:1.6">${esc(d.subtextLayer)}</div>
+    </div>` : ''}
+    ${d.visualMetaphor ? `<div style="background:rgba(0,200,150,.05);border:1px solid rgba(0,200,150,.2);border-radius:8px;padding:14px 18px;margin-bottom:20px">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:.12em;font-weight:700;margin-bottom:6px">🎯 VISUAL METAPHOR</div>
+      <div style="font-size:13px;color:var(--t1);line-height:1.6">${esc(d.visualMetaphor)}</div>
+    </div>` : ''}
     <div class="st">💡 Idea Space</div>
     <div class="g2" style="margin-bottom:24px">${ideasHtml}</div>
     <div class="st">📖 Story — "${esc(d.title || '')}"</div>
@@ -1731,10 +1767,12 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:14px">
           <div class="lbl">${esc(d.char1?.name || '')}</div>
           <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(d.char1?.desc || '')}</p>
+          ${d.char1?.philosophy ? `<p style="font-family:var(--mono);font-size:9px;color:var(--accent2);margin-top:8px;font-style:italic;line-height:1.5">"${esc(d.char1.philosophy)}"</p>` : ''}
         </div>
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:14px">
           <div class="lbl">${esc(d.char2?.name || '')}</div>
           <p style="font-size:12px;color:var(--t1);margin-top:7px;line-height:1.7">${esc(d.char2?.desc || '')}</p>
+          ${d.char2?.philosophy ? `<p style="font-family:var(--mono);font-size:9px;color:var(--accent2);margin-top:8px;font-style:italic;line-height:1.5">"${esc(d.char2.philosophy)}"</p>` : ''}
         </div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:11px 14px;margin-bottom:18px">
@@ -1751,9 +1789,33 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
 
     function renderStage2() {
       const r = state.data.refAnalysis
-      if (!r) return ''
+
+      const refUploadSection = state.referenceImage
+        ? `<div class="ib green" style="margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <img src="${state.referenceImage.preview}" style="width:80px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+              <div>
+                <div class="lbl" style="margin-bottom:4px">✓ REFERENCE IMAGE UPLOADED</div>
+                <p style="font-size:11px;color:var(--t2);line-height:1.5">Style Anchor akan dibuat dari analisis visual gambar ini oleh Gemini secara langsung.</p>
+                <button onclick="clearReferenceImage()" style="font-family:var(--mono);font-size:9px;color:var(--red);background:none;border:none;cursor:pointer;margin-top:6px;padding:0">× Hapus &amp; ganti</button>
+              </div>
+            </div>
+          </div>`
+        : `<div class="ib gold" style="margin-bottom:16px">
+            <div class="lbl" style="margin-bottom:8px">🖼️ UPLOAD REFERENCE IMAGE (OPSIONAL — SANGAT DIANJURKAN)</div>
+            <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px">
+              Upload screenshot dari film animasi, artwork, atau referensi visual style yang kamu inginkan.<br>
+              Gemini akan <strong style="color:var(--t1)">membaca gambar ini secara langsung</strong> untuk membuat Style Anchor yang akurat.<br>
+              <span style="color:var(--t3)">Tanpa upload: Gemini merekomendasikan style berdasarkan cerita saja.</span>
+            </p>
+            <button class="btn-gen" style="padding:8px 18px;font-size:12px" onclick="triggerRefUpload()">📁 Upload Reference Image</button>
+          </div>`
+
+      if (!r) return `<div class="anim">${refUploadSection}</div>`
+
       const rows = (obj, keys) => keys.map(([k, label]) => `<div class="fr"><span class="frl">${label}</span><span class="frv">${esc(r[k] || '')}</span></div>`).join('')
       return `<div class="anim">
+    ${refUploadSection}
     <div class="g2" style="margin-bottom:14px">
       <div class="card"><div class="lbl" style="margin-bottom:10px">1. CORE AESTHETIC</div>
         ${rows(r, [['renderingStyle', 'Rendering Style'], ['materiality', 'Materiality'], ['overallFinish', 'Overall Finish']])}</div>
@@ -1923,7 +1985,11 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
       if (!prompts) return `<div class="anim">${gateBox}</div>`
 
       const cards = prompts.map((mp, i) => xp('mp' + i, `${mp.shotId} — Motion`, `${mp.duration}s`,
-        `${copyBlock(mp.motion, 'COPY MOTION PROMPT')}
+        `${mp.visualObservation ? `<div style="margin-bottom:12px">
+       <div class="lbl" style="margin-bottom:4px">👁️ VISUAL OBSERVATION (dari start frame)</div>
+       <p style="font-family:var(--mono);font-size:10px;color:var(--accent2);line-height:1.7;background:var(--bg2);padding:10px;border-radius:6px;border:1px solid var(--border)">${esc(mp.visualObservation)}</p>
+     </div>` : ''}
+     ${copyBlock(mp.motion, 'COPY MOTION PROMPT')}
      <div class="g3" style="margin-top:12px">
        <div><div class="lbl">CAMERA</div><p style="font-size:11px;color:var(--t1);margin-top:4px">${esc(mp.camera || '')}</p></div>
        <div><div class="lbl">DURATION</div><p style="font-size:11px;color:var(--t1);margin-top:4px">${mp.duration}s</p></div>

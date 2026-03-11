@@ -1,27 +1,26 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const SYSTEM_PROMPT = `You are an Elite AI Video Production Agent operating a 10-stage pipeline.
+const SYSTEM_PROMPT = `You are a world-class short film director and story architect.
 You produce structured JSON output only — no prose, no markdown, no explanation outside the JSON.
 Every response must be valid parseable JSON matching the schema requested.
-You think like a film director and manage like a producer.
-Every decision serves the final video output.
 
-CORE RULES:
-- Visual First: every description must be convertible to an image or video prompt
+STORY ENGINE v6 — FESTIVAL GRADE:
+- Every story must operate on TWO levels simultaneously: the surface level (what we see) and the subtext level (what it means)
+- The audience must never be told what to feel — they must arrive at the feeling themselves
+- SUBTEXT RULE: What a character does must contradict or complicate what they feel. A child who wants connection pushes the other child away. A child who wants to be brave freezes.
+- VISUAL METAPHOR: One physical object or action must carry the emotional weight of the entire story. This metaphor must appear in the first 5 seconds and transform by the final frame.
+- BEHAVIORAL CONTRAST: The two characters must represent two different philosophies of being in the world — not just personality types. Their conflict is a philosophical one, expressed entirely through physical behavior.
+- AMBIGUOUS RESOLUTION: The ending must be emotionally satisfying but not narratively closed. The audience must complete the meaning themselves. Avoid clean reconciliation. Prefer: a small gesture, an exchange of objects, a shared silence.
+- DRAMATIC ECONOMY: Every shot must do at least two things at once — advance the physical action AND deepen the emotional situation.
+- NO DIALOGUE EVER: Emotion is expressed through: direction of gaze, proximity between characters, handling of objects, pace of movement, what characters do NOT do.
+- COMPRESSION: The story must feel like a 20-minute emotional experience compressed into 60 seconds. Every second must be load-bearing.
+
+PIPELINE RULES:
+- Visual First: every description must be convertible to a concrete image prompt
 - Self-Contained: every prompt must contain everything needed — no references to other prompts
-- Element Registry Before Generation: all recurring elements must be registered before any image prompt
-- State Tracking: physical changes must be hardcoded explicitly into every subsequent prompt
-- Motion Prompts require actual start frames — never write from assumptions
-
-STORY ENGINE (v5 — Emotion-Driven):
-- Story must begin from an EMOTIONAL SITUATION, not from an object or activity
-- Objects exist only to express the emotional state of characters
-- Emotion Compression: story feels like a 5-minute emotional story compressed into 60 seconds
-- Emotional arc: initial state → obstacle → hesitation → interaction → emotional shift
-- Visual Hook: within first 3 seconds, one strong signal must be visible
-- Two characters only, with clear behavioral contrast
-- Describe characters through BEHAVIOR, not abstract traits
-- No dialogue — everything through action and visual behavior`;
+- Element Registry Before Generation: all recurring elements registered before any image prompt
+- State Tracking: physical changes hardcoded explicitly into every subsequent prompt
+- Motion Prompts require actual start frames — never write from assumptions`;
 
 export default async function handler(req, res) {
   // CORS
@@ -53,13 +52,21 @@ export default async function handler(req, res) {
   }
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
-  const modelsToTry = ['gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash']
+
+  // Stage 2 (reference image analysis) dan Stage 6 (motion from start frames) butuh vision
+  const isMultimodal = (stage === 2 && ctx.referenceImage) ||
+    (stage === 6 && ctx.images?.length > 0)
+
+  // Vision models only for multimodal, full fallback chain for text
+  const activeModels = isMultimodal
+    ? ['gemini-2.0-flash', 'gemini-1.5-flash']
+    : ['gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash']
 
   let lastError
   let success = false
   let parsed
 
-  for (const modelName of modelsToTry) {
+  for (const modelName of activeModels) {
     if (success) break
 
     for (let attempt = 1; attempt <= 2; attempt++) {
@@ -75,7 +82,32 @@ export default async function handler(req, res) {
           systemInstruction: SYSTEM_PROMPT,
         })
 
-        const result = await model.generateContent(prompt)
+        let result
+        if (isMultimodal) {
+          const parts = [{ text: prompt }]
+
+          if (stage === 2 && ctx.referenceImage) {
+            parts.push({
+              inlineData: {
+                mimeType: ctx.referenceImage.mimeType || 'image/jpeg',
+                data: ctx.referenceImage.data
+              }
+            })
+          } else if (stage === 6 && ctx.images?.length > 0) {
+            for (const img of ctx.images) {
+              parts.push({
+                inlineData: {
+                  mimeType: img.mimeType || 'image/jpeg',
+                  data: img.dataUrl.includes(',') ? img.dataUrl.split(',')[1] : img.dataUrl
+                }
+              })
+            }
+          }
+
+          result = await model.generateContent({ contents: [{ role: 'user', parts }] })
+        } else {
+          result = await model.generateContent(prompt)
+        }
         let text = result.response.text()
 
         // Robust JSON extraction
@@ -158,40 +190,117 @@ Return JSON:
       return `Using this Creative Brief:
 ${JSON.stringify(ctx.brief, null, 2)}
 
-Step 1: Generate an Emotional Anchor — one sentence describing the core emotional situation the story begins from (NOT an object or activity — the EMOTIONAL STATE of a character).
+You are generating a short film story that could win at international festivals (Cannes, Sundance, TIFF short film category).
 
-Step 2: Generate 10 possible interaction elements that could visually express this emotional situation.
+STEP 1 — EMOTIONAL ANCHOR
+Generate one sentence describing the core EMOTIONAL CONTRADICTION the story begins from.
+Not a situation. Not an object. An internal contradiction.
+Example: "A child who controls everything to feel safe discovers that safety is the one thing she cannot control."
+NOT: "A child who is careful meets an impulsive child."
 
-Step 3: Select the best one (visually simple, stable, easy to animate).
+STEP 2 — 10 INTERACTION IDEAS
+Generate 10 possible physical interaction elements that could externalize this emotional contradiction.
+Each must be: visually simple, physically unstable (can change state), and metaphorically resonant.
 
-Step 4: Write the full story.
+STEP 3 — SELECT THE BEST
+Choose the one with the highest metaphorical density — the one that can carry the most emotional weight with the least visual complexity.
+
+STEP 4 — WRITE THE STORY
+Rules:
+- SURFACE: what physically happens, observable and filmable
+- SUBTEXT: what it emotionally means — never shown, only felt through behavior
+- The visual metaphor (the chosen object/interaction) must TRANSFORM between opening and resolution
+- The resolution must be a small gesture — not a reconciliation scene
+- End on an image, not an action — the last frame must be holdable
+- The story must work as both a children's film AND an adult meditation on the same theme simultaneously
 
 Return JSON:
 {
-  "emotionalAnchor": "one sentence emotional premise",
+  "emotionalAnchor": "one sentence — the core emotional contradiction, not a situation",
+  "subtextLayer": "one sentence — what the story is REALLY about beneath the surface action",
+  "visualMetaphor": "one sentence — what object/action carries the full emotional weight and how it transforms from first to last frame",
   "ideas": [
-    { "cat": "category name", "idea": "short description" }
+    { "cat": "category name", "idea": "short description — include its metaphorical resonance" }
   ],
   "selectedIdea": 0,
-  "title": "story title",
-  "char1": { "name": "NAME", "desc": "behavioral description — what they DO, not abstract traits" },
-  "char2": { "name": "NAME", "desc": "behavioral description — what they DO, not abstract traits" },
-  "coreIdea": "one sentence",
-  "opening": "0-8s — environment, both characters, emotional situation, behavioral contrast",
-  "discovery": "8-18s — interaction element appears, both approach it differently",
-  "escalation": "18-35s — multiple attempts, trying, failing, reacting to each other",
-  "turningPoint": "35-50s — small accident or mistake forces behavioral change",
-  "resolution": "50-60s — characters interact in a new emotional way, final image",
-  "qualityChecks": ["check 1", "check 2", "check 3", "check 4", "check 5", "check 6"]
+  "title": "story title — evocative, not descriptive",
+  "char1": {
+    "name": "NAME",
+    "desc": "3 specific physical behaviors that express their inner contradiction — what they DO not who they ARE",
+    "philosophy": "one sentence — their unconscious belief about how the world works"
+  },
+  "char2": {
+    "name": "NAME",
+    "desc": "3 specific physical behaviors that express their inner contradiction — what they DO not who they ARE",
+    "philosophy": "one sentence — their unconscious belief about how the world works"
+  },
+  "coreIdea": "one sentence — the physical interaction at the center",
+  "opening": "0-8s — establish location + both characters visible + emotional contradiction visible in behavior within first 3 seconds + visual metaphor introduced",
+  "discovery": "8-18s — both characters encounter the interaction element, their philosophical difference creates the first obstacle",
+  "escalation": "18-35s — two or three attempts, each failure deepens the emotional situation, subtext becomes more visible in behavior",
+  "turningPoint": "35-50s — something is lost or broken — NOT fixed — and this loss creates an unexpected opening between them",
+  "resolution": "50-60s — a small gesture, an exchange of objects, or a shared silence. Visual metaphor has transformed. End on a holdable image.",
+  "qualityChecks": [
+    "Surface action is clear without any dialogue",
+    "Emotional contradiction is visible in behavior not stated",
+    "Visual metaphor appears in opening and transforms by resolution",
+    "Resolution is a small gesture not a reconciliation scene",
+    "Final frame is a holdable image",
+    "Story works simultaneously as a children's film and an adult meditation"
+  ]
 }`
 
     // ── STAGE 2: REFERENCE IMAGE ANALYSIS ───────────────────
     case 2:
-      return `Based on the story and brief below, generate a hypothetical reference image analysis for a hyper-stylized CGI animated short film style (Pixar/Laika quality) that would suit this story.
+      if (ctx.referenceImage) {
+        return `Analyze this reference image in detail. It will be used as the visual anchor for every image prompt in this animated short film.
+
+The film is about: ${ctx.story.title}
+Characters: ${ctx.story.char1.name} and ${ctx.story.char2.name}
+
+Examine the uploaded image carefully and extract with precision:
+1. Exact rendering style — CGI, 2D, stop-motion aesthetic, watercolor, etc.
+2. Character design language — proportions, head-to-body ratio, eye size relative to face, facial exaggeration level
+3. Color palette — list dominant colors, accent colors, temperature (warm/cool), saturation
+4. Lighting — direction (from where), quality (hard/soft/diffused), time of day implied
+5. Texture quality — how do surfaces feel (matte/glossy/rough/smooth/painted)
+6. Depth of field — how blurred is the background, how sharp is the subject
+7. Mood — what emotional register does this visual style live in
+
+Then write a Style Anchor: a compact technical block that, when appended to any image generation prompt, will reproduce this exact visual style consistently across all 12 shots.
+
+Return JSON:
+{
+  "renderingStyle": "exact description observed from the image",
+  "materiality": "how surfaces feel in this image",
+  "overallFinish": "observed finish description",
+  "proportions": "exact head-body ratio and limb style observed",
+  "eyes": "exact eye style — size relative to face, iris detail, highlight position",
+  "facialFeatures": "exaggeration level observed",
+  "hair": "rendering quality observed",
+  "palette": "dominant colors observed — be specific with color names",
+  "lightingType": "exact lighting observed — direction and quality",
+  "shadowQuality": "soft/hard/ambient — as observed",
+  "depthOfField": "observed depth of field description",
+  "skin": "observed quality and feel",
+  "fabric": "observed detail level",
+  "environment": "observed material style",
+  "mood": "emotional register this style lives in",
+  "styleAnchor": "Render      : [exact render style from image]\nProportions : [exact proportions from image]\nEyes        : [exact eye style from image]\nLighting    : [exact lighting from image]\nTexture     : [exact textures from image]\nPalette     : [exact colors from image]\nMood        : [exact mood from image]\nTechnical   : 1920x1080 | 16:9"
+}`
+      } else {
+        return `Based on this story, recommend the ideal visual style for an animated short film with the emotional register of festival-winning shorts.
 
 Story: ${ctx.story.title}
+Emotional anchor: ${ctx.story.emotionalAnchor || ''}
+Subtext: ${ctx.story.subtextLayer || ''}
 Characters: ${ctx.story.char1.name} — ${ctx.story.char1.desc}
-Setting implied by story: ${ctx.story.opening}
+Setting implied: ${ctx.story.opening}
+
+Recommend a style that:
+- Serves the emotional register — the style must feel like it was invented for this specific story
+- Is achievable and consistent with current AI image generators
+- Has enough visual specificity to be reproduced across 12 shots consistently
 
 Return JSON:
 {
@@ -202,16 +311,17 @@ Return JSON:
   "eyes": "size, expressiveness, highlight style",
   "facialFeatures": "exaggeration level",
   "hair": "rendering quality",
-  "palette": "dominant colors",
+  "palette": "dominant colors — be specific",
   "lightingType": "lighting description",
   "shadowQuality": "soft/hard/ambient",
   "depthOfField": "description",
   "skin": "quality and feel",
   "fabric": "detail level",
   "environment": "material style",
-  "mood": "what this style conveys",
+  "mood": "what emotional register this style lives in",
   "styleAnchor": "Render      : ...\nProportions : ...\nEyes        : ...\nLighting    : ...\nTexture     : ...\nPalette     : ...\nMood        : ...\nTechnical   : 1920x1080 | 16:9"
 }`
+      }
 
     // ── STAGE 3: ELEMENT REGISTRY ────────────────────────────
     case 3:
@@ -309,39 +419,52 @@ Return JSON:
   ]
 }`
 
-    // ── STAGE 6: MOTION PROMPTS (after user uploads start frames) ──
-    case 6:
-      return `Write motion prompts for these shots. The user has uploaded and reviewed their generated start frames.
+    // ── STAGE 6: MOTION PROMPTS (multimodal — reads actual start frames) ──
+    case 6: {
+      const hasImages = ctx.images?.length > 0
+      const imageList = hasImages
+        ? ctx.images.map((img, i) => `Image ${i + 1}: ${img.shotId}`).join('\n')
+        : 'No images uploaded'
 
-Shots: ${JSON.stringify(ctx.shots, null, 2)}
-Start frames uploaded: ${ctx.images?.length || 0} of ${ctx.shots?.length || 0}
+      return `You are analyzing ${hasImages ? ctx.images.length + ' actual start frame images' : 'shot descriptions only'} to write precise motion prompts for a short film.
 
-Per-shot visual observations (from uploaded images):
-${ctx.images?.map(img => `${img.shotId}: [image attached]`).join('\n') || 'No images uploaded'}
+${hasImages ? `I am sending you the actual generated start frame images.
+Analyze each image carefully BEFORE writing its motion prompt.
+For each image observe: exact character positions in frame, what occupies foreground/midground/background, lighting direction, object states, camera angle.
 
-Start frame notes (user descriptions of discrepancies):
-${ctx.startFrameNotes || 'All start frames matched intent — no discrepancies flagged.'}
+Images provided (in order):
+${imageList}` : `No start frames uploaded. Write motion prompts from shot descriptions. Flag each with [NO START FRAME] as first line.`}
 
-CRITICAL RULES:
-- Begin every prompt with "Continue from start frame."
-- Describe ONLY what happens NEXT from the exact visual state in the start frame
-- NEVER describe the starting state — it already exists in the image
-- NEVER correct visual mistakes from the start frame in the motion prompt
+Shot plan:
+${JSON.stringify(ctx.shots, null, 2)}
+
+User discrepancy notes:
+${ctx.startFrameNotes || 'None — user reports all start frames matched intent.'}
+
+MOTION PROMPT RULES:
+- Begin EVERY motion field with "Continue from start frame."
+- For each shot: describe what you actually SEE in the image first (positions, depth, lighting), then describe what moves next
+- Describe camera movement in cinematic terms: push in / pull back / pan left / tilt up / static hold / handheld drift
+- Specify which depth layer moves: foreground character / midground object / background environment
+- NEVER describe the starting state as if setting it up — it already exists in the image
+- NEVER correct visual mistakes — adapt to what is actually there
 - NEVER reference other shots
-- NEVER use conditional language
+- NEVER use conditional language ("if", "might", "could")
 
-Return VALID JSON only. Use double quotes and escape any internal quotes:
+Return VALID JSON:
 {
   "motionPrompts": [
     {
       "shotId": "Shot_01",
-      "motion": "Continue from start frame.\n\n...",
-      "camera": "camera movement instruction",
+      "visualObservation": "what is actually visible in the start frame — character positions, depth layers, lighting direction, object states",
+      "motion": "Continue from start frame.\n\n[brief visual grounding]\n\n[precise description of what moves next and how]",
+      "camera": "cinematic camera instruction — push in / pull back / pan / tilt / static hold",
       "duration": 5,
-      "speed": "Normal | Slow | specific instruction"
+      "speed": "Normal | 80% speed | Slow motion first 1s then normal"
     }
   ]
 }`
+    }
 
     // ── STAGE 7: NARRATION ───────────────────────────────────
     case 7:
