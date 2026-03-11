@@ -1635,24 +1635,40 @@
               
               const img = state.startFrameImages.find(img => img.shotId === shotId)
               
-              try {
-                const shotResult = await callAPI(6, {
-                  shots: d.shots,
-                  targetShotId: shotId,
-                  startFrameNotes: state.startFrameNotes,
-                  images: img ? [img] : [],
-                  revisionNote: state.regenNote || null
-                })
-                
-                if (shotResult?.motionPrompts?.length > 0) {
-                  const targetPrompt = shotResult.motionPrompts.find(p => p.shotId === shotId) || shotResult.motionPrompts[0]
-                  d.motionPrompts[i] = targetPrompt
-                  saveState() // Save intermediate progress immediately!
+              let shotSuccess = false
+              let shotAttempt = 0
+              const MAX_SHOT_ATTEMPTS = 3
+              while (!shotSuccess && shotAttempt < MAX_SHOT_ATTEMPTS) {
+                try {
+                  const shotResult = await callAPI(6, {
+                    shots: d.shots,
+                    targetShotId: shotId,
+                    startFrameNotes: state.startFrameNotes,
+                    images: img ? [img] : [],
+                    revisionNote: state.regenNote || null
+                  })
+                  if (shotResult?.motionPrompts?.length > 0) {
+                    const targetPrompt = shotResult.motionPrompts.find(p => p.shotId === shotId) || shotResult.motionPrompts[0]
+                    d.motionPrompts[i] = targetPrompt
+                    saveState() // Save intermediate progress immediately!
+                  }
+                  shotSuccess = true
+                } catch (e) {
+                  shotAttempt++
+                  const is429 = e.message.includes('429') || e.message.includes('Batas API')
+                  const isTimeout = e.message.includes('Timeout') || e.message.includes('504')
+                  if ((is429 || isTimeout) && shotAttempt < MAX_SHOT_ATTEMPTS) {
+                    const waitSec = is429 ? 60 : 10
+                    MSGS[6] = `${shotId}: quota hit, waiting ${waitSec}s... (attempt ${shotAttempt}/${MAX_SHOT_ATTEMPTS})` 
+                    render()
+                    await new Promise(resolve => setTimeout(resolve, waitSec * 1000))
+                  } else {
+                    anyError = e
+                    break
+                  }
                 }
-              } catch (e) {
-                anyError = e
-                break 
               }
+              if (anyError) break
             }
             
             MSGS[6] = 'Calculating motion vectors...' 
