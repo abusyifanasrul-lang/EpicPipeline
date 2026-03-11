@@ -1549,46 +1549,56 @@
             d.shots = result.shots
             break
           case 5: {
-            if (!Array.isArray(d.imagePrompts) || state.regenNote || d.imagePrompts.length !== d.shots.length) {
-              d.imagePrompts = new Array(d.shots.length).fill(null)
-            }
-            
-            let anyError5 = null
-            for (let i = 0; i < d.shots.length; i++) {
-              const shotId = d.shots[i].id
-              if (d.imagePrompts[i] && !state.regenNote) continue
-              
-              MSGS[5] = `Engineering prompt for ${shotId} (${i+1}/${d.shots.length})...`
+            const BATCH_SIZE = 4
+            const allShots = d.shots || []
+            const allPrompts = []
+
+            // Compress shots — hanya field yang dibutuhkan
+            const compressedShots = allShots.map(s => ({
+              id: s.id,
+              type: s.type,
+              duration: s.duration,
+              camera: s.camera,
+              visual: s.visual,
+              motion: s.motion
+            }))
+
+            // Hitung jumlah batch
+            const totalBatches = Math.ceil(compressedShots.length / BATCH_SIZE)
+
+            for (let b = 0; b < totalBatches; b++) {
+              const batchShots = compressedShots.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE)
+              const batchShotIds = batchShots.map(s => s.id)
+
+              // Filter stateRegistry hanya untuk shots di batch ini
+              const batchStateRegistry = (d.stateRegistry || []).map(reg => ({
+                element: reg.element,
+                states: (reg.states || []).filter(s => batchShotIds.includes(s.shot))
+              })).filter(reg => reg.states.length > 0)
+
+              // Update UI progress
+              state.stages[5].generating = true
+              state.stages[5].batchProgress = `Generating batch ${b + 1} of ${totalBatches}...` 
               render()
-              
-              try {
-                const shotResult = await callAPI(5, {
-                  shots: d.shots,
-                  targetShotId: shotId,
-                  elements: d.elements,
-                  stateRegistry: d.stateRegistry,
-                  styleAnchor: d.styleAnchor,
-                  revisionNote: state.regenNote || null
-                })
-                
-                if (shotResult?.imagePrompts?.length > 0) {
-                  const targetPrompt = shotResult.imagePrompts.find(p => p.shotId === shotId) || shotResult.imagePrompts[0]
-                  d.imagePrompts[i] = targetPrompt
-                  saveState() // Save intermediate progress immediately!
-                }
-              } catch (e) {
-                anyError5 = e
-                break 
+
+              const batchResult = await callAPI('image_batch', {
+                batchShots,
+                elements: d.elements,
+                batchStateRegistry,
+                styleAnchor: d.styleAnchor,
+                revisionNote: state.regenNote || null
+              })
+
+              allPrompts.push(...(batchResult.imagePrompts || []))
+
+              // Delay 3 detik antar batch kecuali batch terakhir
+              if (b < totalBatches - 1) {
+                await new Promise(resolve => setTimeout(resolve, 3000))
               }
             }
-            
-            MSGS[5] = 'Engineering image prompts...' 
-            
-            if (anyError5) {
-              throw anyError5
-            } else {
-              state.regenNote = null
-            }
+
+            state.regenNote = null
+            d.imagePrompts = allPrompts
             break
           }
           case 6: {
@@ -1665,7 +1675,7 @@
             break
         }
 
-        state.stages[idx] = { generated: true, approved: false, generating: false, error: null }
+        state.stages[idx] = { generated: true, approved: false, generating: false, error: null, batchProgress: null }
       } catch (err) {
         state.stages[idx] = { generated: false, approved: false, generating: false, error: err.message }
       }
@@ -2440,6 +2450,10 @@ Be as detailed or as brief as you like. The AI will build the complete creative 
       <div class="gen-title">Generating Stage ${idx + 1}</div>
       <div class="gen-stage">${NAMES[idx]}</div>
       <div class="gen-msg">${MSGS[idx]}</div>
+      ${idx === 5 && s.batchProgress ? `
+        <div style="font-family:var(--mono);font-size:11px;color:var(--gold);margin-top:8px">
+          ${s.batchProgress}
+        </div>` : ''}
       <div class="gen-bar"><div class="gen-prog"></div></div>
     </div>`
         return

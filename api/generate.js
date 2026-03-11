@@ -75,6 +75,7 @@ export default async function handler(req, res) {
   let success = false
   let parsed
   const diagnostics = [] // Track what happened per key
+  let hardStop = false
 
   // Strategy: for each key, try ALL models. Only skip to next key when all models fail.
   // Gemini free tier quota is per-model, not per-key.
@@ -152,6 +153,14 @@ export default async function handler(req, res) {
           break
         } catch (err) {
           lastError = err
+          const isBlocked = err.message.includes('PROHIBITED_CONTENT') ||
+                    err.message.includes('Response was blocked') ||
+                    err.message.includes('Text not available')
+          if (isBlocked) {
+            diagnostics.push(`Key${keyIdx} + ${modelName}: ❌ BLOCKED`)
+            hardStop = true
+            break
+          }
           const isQuota = err.message.includes('429') || err.message.includes('quota') || err.message.includes('RESOURCE_EXHAUSTED')
           const isOverload = err.message.includes('503') || err.message.includes('overloaded')
           const isNotFound = err.message.includes('404') || err.message.includes('not found')
@@ -177,10 +186,23 @@ export default async function handler(req, res) {
           }
           break
         }
-      }
+      }  // end attempt loop
+      if (hardStop) break
       // After attempt loop: continue to next model (no break here!)
     }
     // After model loop: if all models hit quota for this key, try next key
+    if (hardStop) break
+    
+    if (!success && !hardStop) {
+      const keyPos = apiKeys.indexOf(apiKey)
+      if (keyPos < apiKeys.length - 1) await sleep(2000)
+    }
+  }
+
+  if (hardStop) {
+    return res.status(400).json({
+      error: '⚠️ Konten diblokir safety filter AI. Klik "Regenerate with feedback" dan tambahkan catatan: "Gunakan deskripsi perilaku karakter saja, hindari deskripsi fisik yang terlalu spesifik."'
+    })
   }
 
   if (success) {
@@ -608,6 +630,37 @@ Return JSON:
     "totalDuration": "including fade to black"
   }
 }${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
+
+    case 'image_batch':
+      return `Generate one start frame image prompt for each of these shots ONLY.
+
+Shots (this batch only): ${JSON.stringify(ctx.batchShots, null, 2)}
+Element Registry: ${JSON.stringify(ctx.elements, null, 2)}
+State Registry (relevant shots only): ${JSON.stringify(ctx.batchStateRegistry, null, 2)}
+Style Anchor:
+${ctx.styleAnchor}
+
+Rules:
+- Character descriptions must describe ONLY action + expression + state — do NOT re-describe fixed appearance
+- State must be copied EXACTLY from State Registry — word for word
+- Atmosphere (sky/weather) must be stated explicitly in EVERY prompt
+- Style Anchor must appear at the end of EVERY prompt
+- Self-contained: each prompt must work standalone
+
+Return JSON:
+{
+  "imagePrompts": [
+    {
+      "shotId": "Shot_01",
+      "camera": "...",
+      "scene": "environment + explicit sky condition",
+      "chars": "CHARACTER — action + expression only",
+      "state": "exact state from registry",
+      "objects": "element name — position and condition in this shot",
+      "fullPrompt": "complete assembled prompt ready to paste"
+    }
+  ]
+}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this revision to the output.` : ''}`
 
     default:
       return null
