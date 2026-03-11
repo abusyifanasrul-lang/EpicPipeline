@@ -1,8 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 
-export const config = {
-  maxDuration: 60
-}
+export const config = { maxDuration: 60 }
 
 const SYSTEM_PROMPT = `You are a world-class short film director and story architect.
 You produce structured JSON output only — no prose, no markdown, no explanation outside the JSON.
@@ -24,7 +22,7 @@ PIPELINE RULES:
 - Self-Contained: every prompt must contain everything needed — no references to other prompts
 - Element Registry Before Generation: all recurring elements registered before any image prompt
 - State Tracking: physical changes hardcoded explicitly into every subsequent prompt
-- Motion Prompts require actual start frames — never write from assumptions`;
+- Motion Prompts require actual start frames — never write from assumptions`
 
 export default async function handler(req, res) {
   // CORS
@@ -66,8 +64,8 @@ export default async function handler(req, res) {
 
   // Vision models only for multimodal, full fallback chain for text
   const activeModels = isMultimodal
-    ? ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-pro-exp-02-05']
-    : ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-pro-exp-02-05']
+    ? ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash']
+    : ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.0-flash-lite']
 
   let lastError
   let success = false
@@ -95,6 +93,12 @@ export default async function handler(req, res) {
               temperature: 0.8,
               maxOutputTokens: 8192,
             },
+            safetySettings: [
+              { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+              { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+              { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+              { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+            ],
             systemInstruction: SYSTEM_PROMPT,
           })
 
