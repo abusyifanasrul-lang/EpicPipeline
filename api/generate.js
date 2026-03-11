@@ -40,10 +40,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
+  const rawKeys = process.env.GEMINI_API_KEY
+  if (!rawKeys) {
     return res.status(500).json({ error: 'GEMINI_API_KEY not configured' })
   }
+
+  // Support multiple API keys separated by comma: KEY1,KEY2,KEY3
+  const apiKeys = rawKeys.split(',').map(k => k.trim()).filter(Boolean)
 
   const { stage, context } = req.body
   if (stage === undefined || !context) {
@@ -70,82 +73,99 @@ export default async function handler(req, res) {
   let success = false
   let parsed
 
-  for (const modelName of activeModels) {
+  // Try each API key
+  for (const apiKey of apiKeys) {
     if (success) break
 
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.8,
-            maxOutputTokens: 8192,
-          },
-          systemInstruction: SYSTEM_PROMPT,
-        })
+    for (const modelName of activeModels) {
+      if (success) break
 
-        let result
-        if (isMultimodal) {
-          const parts = [{ text: prompt }]
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const genAI = new GoogleGenerativeAI(apiKey)
+          const model = genAI.getGenerativeModel({
+            model: modelName,
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.8,
+              maxOutputTokens: 8192,
+            },
+            systemInstruction: SYSTEM_PROMPT,
+          })
 
-          if (stage === 2 && context.referenceImage) {
-            parts.push({
-              inlineData: {
-                mimeType: context.referenceImage.mimeType || 'image/jpeg',
-                data: context.referenceImage.data
-              }
-            })
-          } else if (stage === 6 && context.images?.length > 0) {
-            for (const img of context.images) {
+          let result
+          if (isMultimodal) {
+            const parts = [{ text: prompt }]
+
+            if (stage === 2 && context.referenceImage) {
               parts.push({
                 inlineData: {
-                  mimeType: img.mimeType || 'image/jpeg',
-                  data: img.dataUrl.includes(',') ? img.dataUrl.split(',')[1] : img.dataUrl
+                  mimeType: context.referenceImage.mimeType || 'image/jpeg',
+                  data: context.referenceImage.data
                 }
               })
+            } else if (stage === 6 && context.images?.length > 0) {
+              for (const img of context.images) {
+                parts.push({
+                  inlineData: {
+                    mimeType: img.mimeType || 'image/jpeg',
+                    data: img.dataUrl.includes(',') ? img.dataUrl.split(',')[1] : img.dataUrl
+                  }
+                })
+              }
             }
+
+            result = await model.generateContent({ contents: [{ role: 'user', parts }] })
+          } else {
+            result = await model.generateContent(prompt)
+          }
+          let text = result.response.text()
+
+          // Robust JSON extraction
+          const firstBrace = text.indexOf('{')
+          if (firstBrace !== -1) text = text.slice(firstBrace)
+
+          try {
+            parsed = JSON.parse(text)
+          } catch {
+            // Coba ekstrak JSON dengan regex
+            const match = text.match(/\{[\s\S]*\}/)
+            if (match) parsed = JSON.parse(match[0])
+            else throw new Error('Response bukan JSON valid')
           }
 
-          result = await model.generateContent({ contents: [{ role: 'user', parts }] })
-        } else {
-          result = await model.generateContent(prompt)
+          success = true
+          break
+        } catch (err) {
+          lastError = err
+          const isQuota = err.message.includes('429') || err.message.includes('quota') || err.message.includes('RESOURCE_EXHAUSTED')
+          const isOverload = err.message.includes('503') || err.message.includes('overloaded')
+          const isNotFound = err.message.includes('404') || err.message.includes('not found')
+
+          console.error(`Key ${apiKeys.indexOf(apiKey) + 1}/${apiKeys.length} Model ${modelName} Attempt ${attempt} failed:`, err.message)
+
+          if (isNotFound) {
+            console.warn(`Model ${modelName} not found, skipping to next model.`)
+            break // model tidak valid — langsung skip ke model berikutnya
+          }
+
+          // If quota exhausted, skip all models for this key and try next key
+          if (isQuota) {
+            console.warn(`Key ${apiKeys.indexOf(apiKey) + 1} quota exhausted, trying next key...`)
+            break // break inner model loop
+          }
+
+          if (attempt < 2 && isOverload) {
+            await sleep(2000 * attempt)
+            continue
+          }
+          // If it's a structural error or we're out of attempts for this model, try next model
+          break
         }
-        let text = result.response.text()
+      }
 
-        // Robust JSON extraction
-        const firstBrace = text.indexOf('{')
-        if (firstBrace !== -1) text = text.slice(firstBrace)
-
-        try {
-          parsed = JSON.parse(text)
-        } catch {
-          // Coba ekstrak JSON dengan regex
-          const match = text.match(/\{[\s\S]*\}/)
-          if (match) parsed = JSON.parse(match[0])
-          else throw new Error('Response bukan JSON valid')
-        }
-
-        success = true
-        break
-      } catch (err) {
-        lastError = err
-        const isQuota = err.message.includes('429') || err.message.includes('quota') || err.message.includes('RESOURCE_EXHAUSTED')
-        const isOverload = err.message.includes('503') || err.message.includes('overloaded')
-        const isNotFound = err.message.includes('404') || err.message.includes('not found')
-
-        console.error(`Model ${modelName} Attempt ${attempt} failed:`, err.message)
-
-        if (isNotFound) {
-          console.warn(`Model ${modelName} not found, skipping to next model.`)
-          break // model tidak valid — langsung skip ke model berikutnya
-        }
-        if (attempt < 2 && (isOverload || isQuota)) {
-          await sleep(2000 * attempt)
-          continue
-        }
-        // If it's a structural error or we're out of attempts for this model, try next model
+      // If quota error, break out of model loop to try next key
+      if (lastError && (lastError.message.includes('429') || lastError.message.includes('quota') || lastError.message.includes('RESOURCE_EXHAUSTED'))) {
         break
       }
     }
@@ -155,10 +175,10 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, data: parsed })
   }
 
-  const isQuota = lastError?.message?.includes('429') || lastError?.message?.includes('quota')
+  const isQuota = lastError?.message?.includes('429') || lastError?.message?.includes('quota') || lastError?.message?.includes('RESOURCE_EXHAUSTED')
   const status = isQuota ? 429 : 500
   const userMessage = isQuota
-    ? "Batas penggunaan (quota) Gemini Free Tier tercapai. Mohon tunggu 1-2 menit lalu coba lagi (Regenerate)."
+    ? `Semua API key (${apiKeys.length}) telah mencapai batas quota harian Gemini Free Tier. Quota reset setiap hari ~2 PM WIB (midnight Pacific). Opsi: (1) Tambahkan API key baru di Vercel → Settings → Environment Variables → GEMINI_API_KEY (pisahkan dengan koma), atau (2) Tunggu hingga quota reset.`
     : `Generation failed: ${lastError?.message}`
 
   return res.status(status).json({ error: userMessage })
