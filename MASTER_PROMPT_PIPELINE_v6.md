@@ -1,10 +1,22 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+# AI VIDEO PRODUCTION PIPELINE — MASTER PROMPT v6
+### Panduan penggunaan manual di ChatGPT / Claude / Gemini
 
-export const config = {
-  maxDuration: 60
-}
+---
 
-const SYSTEM_PROMPT = `You are a world-class short film director and story architect.
+## CARA PAKAI
+
+1. Mulai sesi baru dengan paste **SYSTEM PROMPT** di bawah sebagai pesan pertama
+2. Lanjutkan dengan prompt **Stage 1**, isi bagian `[...]` dengan input kamu
+3. Setiap stage gunakan output stage sebelumnya sebagai input
+4. Kamu bisa merevisi output sebelum lanjut ke stage berikutnya
+
+---
+
+## SYSTEM PROMPT
+*(Paste ini PERTAMA sebelum stage apapun)*
+
+```
+You are a world-class short film director and story architect.
 You produce structured JSON output only — no prose, no markdown, no explanation outside the JSON.
 Every response must be valid parseable JSON matching the schema requested.
 
@@ -24,156 +36,16 @@ PIPELINE RULES:
 - Self-Contained: every prompt must contain everything needed — no references to other prompts
 - Element Registry Before Generation: all recurring elements registered before any image prompt
 - State Tracking: physical changes hardcoded explicitly into every subsequent prompt
-- Motion Prompts require actual start frames — never write from assumptions`;
+- Motion Prompts require actual start frames — never write from assumptions
+```
 
-export default async function handler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+---
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end()
-  }
+## STAGE 1 — CREATIVE BRIEF
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' })
-  }
-
-  const { stage, context } = req.body
-  if (stage === undefined || !context) {
-    return res.status(400).json({ error: 'Missing stage or context' })
-  }
-
-  const prompt = buildPrompt(stage, context)
-  if (!prompt) {
-    return res.status(400).json({ error: `Unknown stage: ${stage}` })
-  }
-
-  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
-
-  // Stage 2 (reference image analysis) dan Stage 6 (motion from start frames) butuh vision
-  const isMultimodal = (stage === 2 && context.referenceImage) ||
-    (stage === 6 && context.images?.length > 0)
-
-  // Vision models only for multimodal, full fallback chain for text
-  const activeModels = isMultimodal
-    ? ['gemini-2.0-flash', 'gemini-2.0-flash-lite']
-    : ['gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite']
-
-  let lastError
-  let success = false
-  let parsed
-
-  for (const modelName of activeModels) {
-    if (success) break
-
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.8,
-            maxOutputTokens: 8192,
-          },
-          systemInstruction: SYSTEM_PROMPT,
-        })
-
-        let result
-        if (isMultimodal) {
-          const parts = [{ text: prompt }]
-
-          if (stage === 2 && context.referenceImage) {
-            parts.push({
-              inlineData: {
-                mimeType: context.referenceImage.mimeType || 'image/jpeg',
-                data: context.referenceImage.data
-              }
-            })
-          } else if (stage === 6 && context.images?.length > 0) {
-            for (const img of context.images) {
-              parts.push({
-                inlineData: {
-                  mimeType: img.mimeType || 'image/jpeg',
-                  data: img.dataUrl.includes(',') ? img.dataUrl.split(',')[1] : img.dataUrl
-                }
-              })
-            }
-          }
-
-          result = await model.generateContent({ contents: [{ role: 'user', parts }] })
-        } else {
-          result = await model.generateContent(prompt)
-        }
-        let text = result.response.text()
-
-        // Robust JSON extraction
-        const firstBrace = text.indexOf('{')
-        if (firstBrace !== -1) text = text.slice(firstBrace)
-
-        try {
-          parsed = JSON.parse(text)
-        } catch {
-          // Coba ekstrak JSON dengan regex
-          const match = text.match(/\{[\s\S]*\}/)
-          if (match) parsed = JSON.parse(match[0])
-          else throw new Error('Response bukan JSON valid')
-        }
-
-        success = true
-        break
-      } catch (err) {
-        lastError = err
-        const isQuota = err.message.includes('429') || err.message.includes('quota') || err.message.includes('RESOURCE_EXHAUSTED')
-        const isOverload = err.message.includes('503') || err.message.includes('overloaded')
-        const isNotFound = err.message.includes('404') || err.message.includes('not found')
-
-        console.error(`Model ${modelName} Attempt ${attempt} failed:`, err.message)
-
-        if (isNotFound) {
-          console.warn(`Model ${modelName} not found, skipping to next model.`)
-          break // model tidak valid — langsung skip ke model berikutnya
-        }
-        if (attempt < 2 && (isOverload || isQuota)) {
-          await sleep(2000 * attempt)
-          continue
-        }
-        // If it's a structural error or we're out of attempts for this model, try next model
-        break
-      }
-    }
-  }
-
-  if (success) {
-    return res.status(200).json({ ok: true, data: parsed })
-  }
-
-  const isQuota = lastError?.message?.includes('429') || lastError?.message?.includes('quota')
-  const status = isQuota ? 429 : 500
-  const userMessage = isQuota
-    ? "Batas penggunaan (quota) Gemini Free Tier tercapai. Mohon tunggu 1-2 menit lalu coba lagi (Regenerate)."
-    : `Generation failed: ${lastError?.message}`
-
-  return res.status(status).json({ error: userMessage })
-}
-
-// ============================================================
-// PROMPT BUILDER — one prompt per stage
-// ============================================================
-function buildPrompt(stage, ctx) {
-  switch (stage) {
-
-    // ── STAGE 0: CREATIVE BRIEF ─────────────────────────────
-    case 0:
-      return `Generate a Creative Brief for this video project concept:
-"${ctx.userInput}"
+```
+Generate a Creative Brief for this video project concept:
+"[DESKRIPSIKAN KONSEP VIDEO KAMU DI SINI]"
 
 Return JSON:
 {
@@ -187,12 +59,17 @@ Return JSON:
   "emotionalTone": "description of overall feeling",
   "pacing": "Brisk | Moderate | Slow | Dynamic — with explanation",
   "soundDesign": "general direction for music and SFX"
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
+}
+```
 
-    // ── STAGE 1: STORY GENERATION ───────────────────────────
-    case 1:
-      return `Using this Creative Brief:
-${JSON.stringify(ctx.brief, null, 2)}
+---
+
+## STAGE 2 — STORY GENERATION
+*(Paste output Stage 1 sebagai [CREATIVE_BRIEF_JSON])*
+
+```
+Using this Creative Brief:
+[CREATIVE_BRIEF_JSON]
 
 You are generating a short film story that could win at international festivals (Cannes, Sundance, TIFF short film category).
 
@@ -252,15 +129,21 @@ Return JSON:
     "Final frame is a holdable image",
     "Story works simultaneously as a children's film and an adult meditation"
   ]
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
+}
+```
 
-    // ── STAGE 2: REFERENCE IMAGE ANALYSIS ───────────────────
-    case 2:
-      if (ctx.referenceImage) {
-        return `Analyze this reference image in detail. It will be used as the visual anchor for every image prompt in this animated short film.
+---
 
-The film is about: ${ctx.story.title}
-Characters: ${ctx.story.char1.name} and ${ctx.story.char2.name}
+## STAGE 3 — VISUAL STYLE ANCHOR
+
+**Opsi A — Jika kamu punya reference image:**
+Upload gambar reference ke AI (gunakan Claude atau GPT-4o yang support vision), lalu kirim prompt ini:
+
+```
+Analyze this reference image in detail. It will be used as the visual anchor for every image prompt in this animated short film.
+
+The film is about: [STORY_TITLE]
+Characters: [CHAR1_NAME] and [CHAR2_NAME]
 
 Examine the uploaded image carefully and extract with precision:
 1. Exact rendering style — CGI, 2D, stop-motion aesthetic, watercolor, etc.
@@ -270,8 +153,6 @@ Examine the uploaded image carefully and extract with precision:
 5. Texture quality — how do surfaces feel (matte/glossy/rough/smooth/painted)
 6. Depth of field — how blurred is the background, how sharp is the subject
 7. Mood — what emotional register does this visual style live in
-
-Then write a Style Anchor: a compact technical block that, when appended to any image generation prompt, will reproduce this exact visual style consistently across all 12 shots.
 
 Return JSON:
 {
@@ -291,11 +172,16 @@ Return JSON:
   "environment": "observed material style",
   "mood": "emotional register this style lives in",
   "styleAnchor": "Render      : [exact render style from image]\nProportions : [exact proportions from image]\nEyes        : [exact eye style from image]\nLighting    : [exact lighting from image]\nTexture     : [exact textures from image]\nPalette     : [exact colors from image]\nMood        : [exact mood from image]\nTechnical   : 1920x1080 | 16:9"
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
-      } else {
-        return `Based on this story, recommend the ideal visual style for an animated short film with the emotional register of festival-winning shorts.
+}
+```
 
-Story: ${JSON.stringify(ctx.story, null, 2)}
+**Opsi B — Tanpa reference image:**
+*(Paste output Stage 2 sebagai [STORY_JSON])*
+
+```
+Based on this story, recommend the ideal visual style for an animated short film with the emotional register of festival-winning shorts.
+
+Story: [STORY_JSON]
 
 Recommend a style that:
 - Serves the emotional register — the style must feel like it was invented for this specific story
@@ -320,19 +206,22 @@ Return JSON:
   "environment": "material style",
   "mood": "what emotional register this style lives in",
   "styleAnchor": "Render      : ...\nProportions : ...\nEyes        : ...\nLighting    : ...\nTexture     : ...\nPalette     : ...\nMood        : ...\nTechnical   : 1920x1080 | 16:9"
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
-      }
+}
+```
 
-    // ── STAGE 3: ELEMENT REGISTRY ────────────────────────────
-    case 3:
-      return `Build the Element Registry for this film.
+---
 
-Story: ${JSON.stringify(ctx.story, null, 2)}
+## STAGE 4 — ELEMENT REGISTRY
+*(Paste output Stage 2 sebagai [STORY_JSON] dan styleAnchor dari Stage 3 sebagai [STYLE_ANCHOR])*
+
+```
+Build the Element Registry for this film.
+
+Story: [STORY_JSON]
 Style Anchor:
-${ctx.styleAnchor}
+[STYLE_ANCHOR]
 
 Shot count planned: approximately 12 shots covering opening → discovery → escalation → turning point → resolution.
-${ctx.shots ? `Actual shots breakdown:\n${JSON.stringify(ctx.shots, null, 2)}` : ''}
 Track state changes across ALL shots for each registered element.
 
 Rules:
@@ -360,13 +249,18 @@ Return JSON:
       ]
     }
   ]
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
+}
+```
 
-    // ── STAGE 4: STORYBOARD ──────────────────────────────────
-    case 4:
-      return `Create the shot breakdown for this film.
+---
 
-Story: ${JSON.stringify(ctx.story, null, 2)}
+## STAGE 5 — STORYBOARD & SHOT BREAKDOWN
+*(Paste output Stage 2 sebagai [STORY_JSON])*
+
+```
+Create the shot breakdown for this film.
+
+Story: [STORY_JSON]
 
 Camera Differentiation Rules:
 - No two consecutive solo shots of the same character may use the same camera distance
@@ -389,17 +283,22 @@ Return JSON:
       "audio": "music direction / SFX note"
     }
   ]
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
+}
+```
 
-    // ── STAGE 5: IMAGE PROMPTS ───────────────────────────────
-    case 5:
-      return `Generate one start frame image prompt per shot.
+---
 
-Shots: ${JSON.stringify(ctx.shots, null, 2)}
-Element Registry: ${JSON.stringify(ctx.elements, null, 2)}
-State Registry: ${JSON.stringify(ctx.stateRegistry, null, 2)}
+## STAGE 6 — IMAGE PROMPTS
+*(Paste [SHOTS_JSON] dari Stage 5, [ELEMENTS_JSON] dan [STATE_REGISTRY_JSON] dari Stage 4, [STYLE_ANCHOR] dari Stage 3)*
+
+```
+Generate one start frame image prompt per shot.
+
+Shots: [SHOTS_JSON]
+Element Registry: [ELEMENTS_JSON]
+State Registry: [STATE_REGISTRY_JSON]
 Style Anchor:
-${ctx.styleAnchor}
+[STYLE_ANCHOR]
 
 Rules:
 - Character descriptions must describe ONLY action + expression + state — do NOT re-describe fixed appearance (reference image handles this)
@@ -421,29 +320,27 @@ Return JSON:
       "fullPrompt": "complete assembled prompt ready to paste"
     }
   ]
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
+}
+```
 
-    // ── STAGE 6: MOTION PROMPTS (multimodal — reads actual start frames) ──
-    case 6: {
-      const hasImages = ctx.images?.length > 0
-      const imageList = hasImages
-        ? ctx.images.map((img, i) => `Image ${i + 1}: ${img.shotId}`).join('\n')
-        : 'No images uploaded'
+---
 
-      return `You are analyzing ${hasImages ? ctx.images.length + ' actual start frame images' : 'shot descriptions only'} to write precise motion prompts for a short film.
+## STAGE 7 — MOTION PROMPTS
+*(Setelah kamu generate start frame images secara eksternal. Paste [SHOTS_JSON] dari Stage 5)*
 
-${hasImages ? `I am sending you the actual generated start frame images.
+**Jika kamu bisa upload gambar ke AI (Claude/GPT-4o):**
+Upload semua start frame images, lalu kirim:
+
+```
+You are analyzing the actual start frame images I have uploaded to write precise motion prompts for a short film.
+
 Analyze each image carefully BEFORE writing its motion prompt.
 For each image observe: exact character positions in frame, what occupies foreground/midground/background, lighting direction, object states, camera angle.
 
-Images provided (in order):
-${imageList}` : `No start frames uploaded. Write motion prompts from shot descriptions. Flag each with [NO START FRAME] as first line.`}
-
 Shot plan:
-${JSON.stringify(ctx.shots, null, 2)}
+[SHOTS_JSON]
 
-User discrepancy notes:
-${ctx.startFrameNotes || 'None — user reports all start frames matched intent.'}
+User discrepancy notes: [CATATAN PERBEDAAN DARI YANG DIHARAPKAN, atau tulis "None"]
 
 MOTION PROMPT RULES:
 - Begin EVERY motion field with "Continue from start frame."
@@ -455,7 +352,7 @@ MOTION PROMPT RULES:
 - NEVER reference other shots
 - NEVER use conditional language ("if", "might", "could")
 
-Return VALID JSON:
+Return JSON:
 {
   "motionPrompts": [
     {
@@ -467,17 +364,27 @@ Return VALID JSON:
       "speed": "Normal | 80% speed | Slow motion first 1s then normal"
     }
   ]
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
-    }
+}
+```
 
-    // ── STAGE 7: NARRATION ───────────────────────────────────
-    case 7:
-      return `Write the narration for this film.
+**Jika tanpa upload gambar:**
+Ganti baris pertama dengan:
+```
+No start frames uploaded. Write motion prompts from shot descriptions only. Flag each with [NO START FRAME] as first line.
+```
 
-Story: ${JSON.stringify(ctx.story, null, 2)}
-Brief: ${JSON.stringify(ctx.brief, null, 2)}
+---
 
-First assess: does this story need narration? 
+## STAGE 8 — NARRATION
+*(Paste [STORY_JSON] dari Stage 2 dan [BRIEF_JSON] dari Stage 1)*
+
+```
+Write the narration for this film.
+
+Story: [STORY_JSON]
+Brief: [BRIEF_JSON]
+
+First assess: does this story need narration?
 Recommendation options: "none" | "minimal" | "full"
 
 If minimal or full — write the narration.
@@ -496,14 +403,20 @@ Return JSON:
   "lines": [
     { "timestamp": "00:01", "text": "narration line", "fadeIn": 2 }
   ]
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
+}
+```
 
-    // ── STAGE 8: MUSIC ───────────────────────────────────────
-    case 8:
-      return `Design the music and sound for this film.
+---
 
-Story: ${JSON.stringify(ctx.story, null, 2)}
-Shots: ${JSON.stringify(ctx.shots.map(s => ({ id: s.id, duration: s.duration, motion: s.motion })), null, 2)}
+## STAGE 9 — MUSIC & SOUND DESIGN
+*(Paste [STORY_JSON] dari Stage 2 dan shots summary dari Stage 5)*
+
+```
+Design the music and sound for this film.
+
+Story: [STORY_JSON]
+Shots: [SHOTS_SUMMARY_JSON]
+(Format shots summary: array of { id, duration, motion } saja)
 
 Return JSON:
 {
@@ -523,15 +436,21 @@ Return JSON:
   "sfx": [
     { "shot": "Shot_01", "sfx": "description", "vol": 70 }
   ]
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
+}
+```
 
-    // ── STAGE 9: ASSEMBLY GUIDE ──────────────────────────────
-    case 9:
-      return `Create the complete assembly guide for this film.
+---
 
-Title: ${ctx.brief.title}
-Shots: ${JSON.stringify(ctx.shots.map(s => ({ id: s.id, duration: s.duration })), null, 2)}
-Narration lines: ${JSON.stringify(ctx.narration?.lines || [], null, 2)}
+## STAGE 10 — ASSEMBLY GUIDE
+*(Paste [BRIEF_JSON] dari Stage 1, shots dari Stage 5, narration lines dari Stage 8)*
+
+```
+Create the complete assembly guide for this film.
+
+Title: [PROJECT_TITLE]
+Shots: [SHOTS_DURATION_JSON]
+(Format: array of { id, duration } saja)
+Narration lines: [NARRATION_LINES_JSON]
 
 Rules:
 - DEFAULT: Hard cut for all shots
@@ -567,9 +486,14 @@ Return JSON:
     "audio": "AAC 48kHz Stereo",
     "totalDuration": "including fade to black"
   }
-}${ctx.revisionNote ? `\n\nREVISION REQUEST FROM USER:\n"${ctx.revisionNote}"\nApply this feedback to the output above.` : ''}`
-
-    default:
-      return null
-  }
 }
+```
+
+---
+
+## TIPS PENGGUNAAN MANUAL
+
+- **Revisi output**: Setelah tiap stage, kamu bisa kirim: *"Revisi: [instruksi perubahan kamu]. Gunakan output sebelumnya sebagai base."*
+- **Pilih idea**: Di Stage 2, setelah melihat 10 ideas, kirim: *"Gunakan idea #X sebagai interaksi utama. Tulis ulang story dengan idea ini."*
+- **Claude vs ChatGPT**: Claude lebih konsisten mengikuti JSON schema. GPT-4o lebih kreatif di story. Untuk Stage 7 (Motion Prompts dengan gambar), gunakan yang support vision.
+- **Simpan setiap output**: Copy JSON output tiap stage ke file terpisah sebelum lanjut.

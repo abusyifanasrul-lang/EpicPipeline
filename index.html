@@ -1493,6 +1493,7 @@
             result = await callAPI(3, {
               story: d.story,
               styleAnchor: d.styleAnchor,
+              shots: d.shots || null,
               revisionNote: state.regenNote || null
             })
             state.regenNote = null
