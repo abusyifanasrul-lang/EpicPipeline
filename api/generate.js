@@ -1,8 +1,8 @@
+import { GoogleGenerativeAI } from '@google/generative-ai'
+
 export const config = {
   maxDuration: 60
 }
-
-import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const SYSTEM_PROMPT = `You are a world-class short film director and story architect.
 You produce structured JSON output only — no prose, no markdown, no explanation outside the JSON.
